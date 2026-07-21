@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(.venv/bin/python -c \"import chemprop, os; print\\(getattr\\(chemprop,'__version__','?'\\)\\); print\\(os.path.dirname\\(chemprop.__file__\\)\\)\")",
+      "Bash(.venv/bin/python -c \"import chemprop.nn as n; print\\('nn:', [a for a in dir\\(n\\) if not a.startswith\\('_'\\)]\\)\")",
+      "Bash(.venv/bin/python -c \"import chemprop.models as m; print\\('models:', [a for a in dir\\(m\\) if not a.startswith\\('_'\\)]\\)\")",
+      "Bash(.venv/bin/python -c \"import tabpfn.finetuning as f, os; print\\(os.path.dirname\\(f.__file__\\)\\); print\\([a for a in dir\\(f\\) if not a.startswith\\('_'\\)]\\)\")",
+      "Bash(.venv/bin/python -c \"from chemprop.models import MPNN; print\\([a for a in dir\\(MPNN\\) if not a.startswith\\('_'\\)]\\)\")",
+      "Bash(.venv/bin/python -)",
+      "Bash(python3 -c \"import pdfplumber; print\\('ok'\\)\")",
+      "Bash(pip install *)"
+    ]
+  }
+}

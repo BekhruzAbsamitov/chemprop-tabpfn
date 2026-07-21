@@ -1,0 +1,38 @@
+[project]
+name = "chemprop-tabpfn"
+version = "0.1.0"
+# Cap below 3.14: the cu124 torch wheels only ship for Python 3.12/3.13, not 3.14.
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "chemprop>=2.2.4",
+    "pandas>=3.0.3",
+    "polars>=1.42.1",
+    "rdkit>=2026.3.3",
+    "scikit-learn>=1.9.0",
+    "scipy>=1.18.0",
+    "scipy-stubs~=1.18.0",
+    "tabpfn>=8.1.0",
+    "torch>=2.4.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
+
+# The Saarland GPU nodes have a CUDA 12.4 driver, but the default PyPI torch is
+# built for CUDA 13 (too new -> "driver too old" -> no GPU). Pull torch from the
+# PyTorch cu124 index instead so it matches the cluster driver.
+[[tool.uv.index]]
+name = "pytorch-cu124"
+url = "https://download.pytorch.org/whl/cu124"
+explicit = true
+
+[tool.uv.sources]
+torch = [
+    { index = "pytorch-cu124", marker = "sys_platform == 'linux' or sys_platform == 'win32'" }
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

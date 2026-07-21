@@ -1,0 +1,20 @@
+# HTCondor INTERACTIVE session inside the docker image — for the one-time setup.
+# Submit with:  condor_submit -i cluster/interactive.sub
+# It drops you into a shell IN the container; then run cluster/setup_env.sh there
+# (so the uv env is built with the same libraries the batch job will use).
+
+universe                = docker
+docker_image            = pytorch/pytorch:2.3.1-cuda12.1-cudnn8-devel
+
+should_transfer_files   = YES
+getenv                  = HOME
+
+request_GPUs            = 1
+request_CPUs            = 8
+request_memory          = 16G
+
+requirements            = UidDomain == "cs.uni-saarland.de"
++WantGPUHomeMounted     = true
++WantScratchMounted     = true
+
+queue 1

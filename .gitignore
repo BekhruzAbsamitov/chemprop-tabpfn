@@ -1,0 +1,27 @@
+# uv environments and config
+.venv/
+uv.lock
+
+# PyTorch & Model Weights
+*.pt
+*.pth
+*.ckpt
+
+# Data
+data/raw/
+data/curated/
+*.csv
+*.sdf
+
+# Secrets / local env (keep .env.example, ignore the real one)
+.env
+.env.local
+
+# Experiment outputs and cluster job logs
+experiments/runs/
+cluster/logs/
+
+# PyCharm and Jupyter
+.idea/
+.ipynb_checkpoints/
+__pycache__/
