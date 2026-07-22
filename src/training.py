@@ -60,7 +60,9 @@ def evaluate_val(encoder, head, val_episodes) -> tuple[float, float]:
         preds = head.predict(emb_c, ep.context_y, emb_q)
         p, t = preds.cpu().numpy(), ep.query_y.flatten().cpu().numpy()
         if len(p) > 1:
-            rhos.append(float(spearmanr(p, t).statistic))
+            rho = float(spearmanr(p, t).statistic)
+            if rho == rho:  # drop NaN (an episode whose predictions came out constant)
+                rhos.append(rho)
     if was_training:
         encoder.train()
     mean = lambda xs: sum(xs) / len(xs) if xs else float("nan")
