@@ -52,7 +52,9 @@ REPO_ROOT = SRC_DIR.parent
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
+from active_learning import batched_encode, save_hit_curves  # noqa: E402
 from data_utils import data  # noqa: E402
+from metrics import oracle_efficiency  # noqa: E402
 from models.acquisition import acquisition_scores  # noqa: E402
 from models.encoder import MoleculeEncoder  # noqa: E402
 from models.tabpfn_regressor import TabPFNHead, _load_hf_token  # noqa: E402
@@ -92,15 +94,8 @@ SAVE_CURVES_TO = "experiments/al_finetune_curves.csv"  # "" = don't save
 
 
 # --------------------------------------------------------------------------- #
-# Encoding helpers                                                             #
+# Fine-tuning the encoder on the accumulated labels                            #
 # --------------------------------------------------------------------------- #
-def encode(encoder: MoleculeEncoder, smiles: list[str], device: torch.device) -> torch.Tensor:
-    """Encode SMILES -> [N, d] with the current encoder weights (no grad, scrubbed)."""
-    with torch.no_grad():
-        X = encoder(smiles).to(device)
-    return torch.nan_to_num(X, nan=0.0, posinf=0.0, neginf=0.0)
-
-
 def finetune_encoder(
     encoder: MoleculeEncoder,
     optimizer: torch.optim.Optimizer,
@@ -180,8 +175,8 @@ def run_one_al(
             candidates = list(unlabeled)
 
         ctx = labeled if len(labeled) <= MAX_SCORE_CONTEXT else rng.sample(labeled, MAX_SCORE_CONTEXT)
-        X_ctx = encode(encoder, [smiles[i] for i in ctx], device)
-        X_cand = encode(encoder, [smiles[i] for i in candidates], device)
+        X_ctx = batched_encode(encoder, [smiles[i] for i in ctx], device, warn=False)
+        X_cand = batched_encode(encoder, [smiles[i] for i in candidates], device, warn=False)
         mu, sigma = head.predict_dist(X_ctx, y[ctx], X_cand)
         best = float(y[ctx].max())
         scores = acquisition_scores(STRATEGY, mu.cpu(), sigma.cpu(), best, xi=XI)
@@ -195,30 +190,6 @@ def run_one_al(
         unlabeled = [i for i in unlabeled if i not in picks_set]
         hits.append(len(labeled_set & hit_set))
     return hits
-
-
-def efficiency(mean_hits: list[float], budgets: list[int], total_hits: int) -> float:
-    """Oracle-efficiency in [0,1]: 1.0 = perfect, ~ACTIVE_QUANTILE = random floor."""
-    if total_hits == 0:
-        return float("nan")
-    fracs = [h / min(b, total_hits) for h, b in zip(mean_hits, budgets)]
-    return sum(fracs) / len(fracs)
-
-
-def save_curves(results: dict, budgets: list[int], total_hits: int) -> None:
-    if not SAVE_CURVES_TO:
-        return
-    import csv
-    out = Path(SAVE_CURVES_TO)
-    out = out if out.is_absolute() else REPO_ROOT / out
-    out.parent.mkdir(parents=True, exist_ok=True)
-    with out.open("w", newline="") as f:
-        w = csv.writer(f)
-        w.writerow(["arm", "budget", "mean_hits", "recall", "total_hits"])
-        for arm, mean_hits in results.items():
-            for b, h in zip(budgets, mean_hits):
-                w.writerow([arm, b, f"{h:.3f}", f"{h / total_hits:.4f}", total_hits])
-    print(f"\nsaved curves -> {out}")
 
 
 # --------------------------------------------------------------------------- #
@@ -248,7 +219,7 @@ def main() -> None:
         per_seed = [run_one_al(arm, head, smiles, y, hit_set, s, device) for s in range(N_SEEDS)]
         mean_hits = [sum(run[k] for run in per_seed) / N_SEEDS for k in range(N_ROUNDS + 1)]
         results[arm] = mean_hits
-        eff = efficiency(mean_hits, budgets, total_hits)
+        eff = oracle_efficiency(mean_hits, budgets, total_hits)
         print(f"    hits@{budgets[-1]} = {mean_hits[-1]:.1f}/{total_hits} | "
               f"efficiency {eff:.3f}  ({time.time() - t0:.0f}s)")
 
@@ -258,16 +229,19 @@ def main() -> None:
     print("=" * 60)
     print(f"  {'arm':12s} {'hits@'+str(budgets[-1]):>10s} {'efficiency':>12s}")
     for arm, mean_hits in results.items():
-        print(f"  {arm:12s} {mean_hits[-1]:>10.1f} {efficiency(mean_hits, budgets, total_hits):>12.3f}")
+        print(f"  {arm:12s} {mean_hits[-1]:>10.1f} {oracle_efficiency(mean_hits, budgets, total_hits):>12.3f}")
 
     if "finetune" in results and "frozen" in results:
-        d = efficiency(results["finetune"], budgets, total_hits) - \
-            efficiency(results["frozen"], budgets, total_hits)
+        d = oracle_efficiency(results["finetune"], budgets, total_hits) - \
+            oracle_efficiency(results["frozen"], budgets, total_hits)
         print(f"\nVERDICT: fine-tune - frozen = {d:+.3f}  "
               f"-> {'FINE-TUNING HELPS' if d > 0.01 else 'no real gain from fine-tuning'}")
         print("  (SMOKE-TEST defaults — scale up + run on GPU before trusting this.)")
 
-    save_curves(results, budgets, total_hits)
+    if SAVE_CURVES_TO:
+        out = Path(SAVE_CURVES_TO)
+        out = out if out.is_absolute() else REPO_ROOT / out
+        print(f"\nsaved curves -> {save_hit_curves(results, budgets, total_hits, out)}")
     print(f"\ntotal time: {time.time() - t0:.0f}s")
 
 

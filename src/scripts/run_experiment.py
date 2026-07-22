@@ -37,11 +37,11 @@ from training import TrainConfig, build_val_episodes, train_encoder  # noqa: E40
 # SETTINGS — edit these, then press Run.                                       #
 # --------------------------------------------------------------------------- #
 USE_FULL_DATA = False  # False = small dev ChEMBL (fast); True = full cleaned file
-HIDDEN_SIZE = 128      # encoder width (fast local = 128; thesis/GPU scale = 300)
-N_TRAIN_STEPS = 500    # how many training episodes to run
-LEARNING_RATE = 1e-4   # training step size
-N_ESTIMATORS = 1       # TabPFN passes to average (1 = fast local; 8+ on a GPU)
-LOSS_FN = "nll"        # "nll" (recommended) | "mse" | "huber"
+HIDDEN_SIZE = 128  # encoder width (fast local = 128; thesis/GPU scale = 300)
+N_TRAIN_STEPS = 500  # how many training episodes to run
+LEARNING_RATE = 1e-4  # training step size
+N_ESTIMATORS = 1  # TabPFN passes to average (1 = fast local; 8+ on a GPU)
+LOSS_FN = "nll"  # "nll" (recommended) | "mse" | "huber"
 
 # Cap on training-episode size — a differentiable TabPFN backward over a giant
 # assay exhausts even an 80 GB GPU. Rarely binds (most assays are small).
@@ -49,7 +49,7 @@ MAX_TRAIN_CONTEXT = 128
 MAX_TRAIN_QUERY = 128
 
 SEED = 0
-PRINT_EVERY = 100      # print training progress every N steps
+PRINT_EVERY = 100  # print training progress every N steps
 
 # In-domain learning curve: fixed held-out ChEMBL test episodes, scored every
 # EVAL_EVERY steps. EVAL_EVERY must be a multiple of PRINT_EVERY. 0 disables it.

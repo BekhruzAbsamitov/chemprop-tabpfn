@@ -15,8 +15,8 @@ when_to_transfer_output = ON_EXIT
 getenv                  = HOME
 
 request_GPUs            = 1
-request_CPUs            = 8
-request_memory          = 64GB
+request_CPUs            = 4
+request_memory          = 32GB
 
 requirements            = UidDomain == "cs.uni-saarland.de"
 +WantGPUHomeMounted     = true

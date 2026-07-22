@@ -1,17 +1,3 @@
-"""src/data.py — load the datasets the pipeline uses.
-
-Two data sources:
-  1. ChEMBL (parquet) -> "episodes" for training/evaluation. One assay = one task.
-  2. S. aureus (csv)  -> the real evaluation target (SMILES + pMIC).
-
-Of the 42 columns in the ChEMBL file we load only the FOUR the pipeline needs
-(the molecule, its activity value, the assay id, and the split). Chemprop builds
-all its features from the SMILES, so the other 38 columns are ignored here.
-
-You can press Run on this file directly: its __main__ block prints a quick
-summary so you can confirm the data loads correctly. No terminal flags needed.
-"""
-
 from __future__ import annotations
 
 import random
@@ -21,23 +7,15 @@ from pathlib import Path
 import polars as pl
 import torch
 
-# --------------------------------------------------------------------------- #
-# SETTINGS — file locations and the column names we read. Edit if files move.  #
-# Paths are anchored to the repo, so running from any folder still works.      #
-# --------------------------------------------------------------------------- #
-# This file lives at src/data_utils/data.py, so go up three levels to the repo root.
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-# Cleaned files (raw-scale assays removed, val folded into train) — see
-# scripts/clean_chembl_targets.py. Dev is also slimmed to the 4 columns used here.
 CHEMBL_DEV_FILE = REPO_ROOT / "data" / "curated" / "chembl36_dev_clean.parquet"  # small, fast
 CHEMBL_FULL_FILE = REPO_ROOT / "data" / "curated" / "chembl36_curated_clean.parquet"  # full, cleaned
 S_AUREUS_FILE = REPO_ROOT / "data" / "curated" / "s_aureus_curated_with_scores_filtered.csv"
 
-# The only 4 ChEMBL columns the pipeline uses:
 ASSAY_COL = "assay_x_type_x_doc"  # task id: one assay = one prediction task
 SMILES_COL = "canonical_smiles"  # the molecule
 TARGET_COL = "target_transformed"  # the value to predict
-SPLIT_COL = "split"  # "train" / "val" / "test"
+SPLIT_COL = "split"
 
 # Column names inside the S. aureus csv:
 S_AUREUS_SMILES_COL = "Smiles"

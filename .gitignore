@@ -18,7 +18,7 @@ data/curated/
 .env.local
 
 # Experiment outputs and cluster job logs
-experiments/runs/
+experiments/
 cluster/logs/
 
 # PyCharm and Jupyter

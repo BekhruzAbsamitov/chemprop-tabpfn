@@ -1,32 +1,3 @@
-"""src/models/tabpfn_regressor.py — the frozen TabPFN that makes predictions.
-
-Where `encoder.py` turns a molecule into numbers, THIS file takes those numbers
-and predicts activity. It wraps TabPFN, a pre-trained "tabular foundation model".
-
-The key idea — in-context learning:
-    TabPFN does not train on your data. Instead you hand it, in one shot:
-        * a CONTEXT set: molecules WITH known activity (the examples to learn from)
-        * a QUERY set:   molecules WITHOUT labels (the ones to predict)
-    and a single forward pass predicts the query activities — like a very smart
-    "look at these examples, now fill in the blanks".
-
-Why this file is the clever part of the thesis:
-    TabPFN itself is FROZEN — we never change its weights. But it is
-    *differentiable*: we can measure how wrong its predictions are and push that
-    error signal backwards THROUGH the frozen TabPFN, all the way back into the
-    embeddings (and therefore into the Chemprop encoder that made them). That is
-    how Chemprop "learns what TabPFN wants".
-
-One safety detail (the "spike fix"):
-    TabPFN rescales the context labels by their standard deviation. If a context
-    happens to have almost-equal labels, that std is tiny and a far-off query
-    label blows the loss up to huge numbers. We clip the rescaled target to a
-    sensible range (TARGET_Z_CLIP) so one outlier can't dominate training.
-
-Press Run on this file to see TabPFN predict from example numbers AND to confirm
-the training signal reaches back to the inputs. (Needs HF_TOKEN — see below.)
-"""
-
 from __future__ import annotations
 
 import os

@@ -1,24 +1,13 @@
-"""src/training.py — train the Chemprop encoder + track an honest learning curve.
-
-Shared by run_experiment.py (and its GPU wrapper). Three pieces:
-  * the training loop itself (train_encoder), sampling assays WITHOUT replacement;
-  * a FIXED held-out ChEMBL validation set (build_val_episodes) evaluated every
-    few steps (evaluate_val) — the honest in-domain signal, since the per-step
-    training loss is noisy (a different assay each step);
-  * a small TrainConfig so a script passes its settings in instead of the loop
-    reading module globals.
-"""
-
 from __future__ import annotations
 
 import csv
 import random
 import time
-import zlib
 from dataclasses import dataclass
 from pathlib import Path
 
 import torch
+import zlib
 from scipy.stats import spearmanr
 
 from data_utils import data
@@ -31,12 +20,12 @@ def stable_seed(text: str) -> int:
 
 
 def build_val_episodes(
-    assays: list[data.Assay],
-    *,
-    n_episodes: int,
-    max_context: int,
-    max_query: int,
-    rng: random.Random,
+        assays: list[data.Assay],
+        *,
+        n_episodes: int,
+        max_context: int,
+        max_query: int,
+        rng: random.Random,
 ) -> list[data.Episode]:
     """Freeze `n_episodes` episodes from held-out assays.
 
@@ -87,10 +76,10 @@ class TrainConfig:
     max_query: int
     hidden_size: int
     seed: int = 0
-    eval_every: int = 0          # 0 disables the in-domain curve
+    eval_every: int = 0  # 0 disables the in-domain curve
     print_every: int = 100
-    val_curve_csv: str = ""      # "" = don't write the curve CSV
-    save_encoder_to: str = ""    # "" = don't checkpoint
+    val_curve_csv: str = ""  # "" = don't write the curve CSV
+    save_encoder_to: str = ""  # "" = don't checkpoint
 
 
 def train_encoder(encoder, head, assays, val_episodes, cfg: TrainConfig, t0: float,

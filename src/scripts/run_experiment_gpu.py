@@ -1,30 +1,15 @@
-"""src/scripts/run_experiment_gpu.py — the FULL-SCALE training run, for a GPU.
-
-Same training as run_experiment.py, with the big settings the thesis reports:
-the full cleaned ChEMBL (180k train assays), a wider encoder, and a stronger
-TabPFN ensemble. It only TRAINS the encoder (+ tracks the in-domain learning
-curve); evaluate the saved encoder on the targets separately with
-scripts/model_evaluation.py.
-
-You don't edit run_experiment.py — this file just overrides its settings and
-runs it. Submit on the cluster with cluster/run_gpu.sub, or press Run on a GPU.
-"""
-
 from __future__ import annotations
 
 import sys
 from pathlib import Path
 
-# src/ on the path so `from scripts import ...` resolves from the IDE Run button.
 SRC_DIR = Path(__file__).resolve().parent.parent
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
 from scripts import run_experiment as exp  # noqa: E402
 
-# --------------------------------------------------------------------------- #
-# FULL-SCALE SETTINGS (GPU). Edit here — run_experiment.py stays untouched.    #
-# --------------------------------------------------------------------------- #
+
 exp.USE_FULL_DATA = True      # the full cleaned ChEMBL (180k train assays)
 exp.HIDDEN_SIZE = 300         # thesis-scale encoder width (local used 128)
 exp.N_ESTIMATORS = 8          # stronger TabPFN ensemble (local used 1)

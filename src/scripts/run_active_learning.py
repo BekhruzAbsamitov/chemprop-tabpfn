@@ -33,16 +33,25 @@ from __future__ import annotations
 
 import csv
 import random
+import sys
 import time
 from pathlib import Path
 
 import torch
 
-from data_utils import data
-from models.acquisition import acquisition_scores
-from models.encoder import MoleculeEncoder
-from models.morgan import morgan_features
-from models.tabpfn_regressor import TabPFNHead, _load_hf_token
+# Make `src/` importable so this runs from the IDE Run button with no PYTHONPATH.
+SRC_DIR = Path(__file__).resolve().parent.parent
+if str(SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SRC_DIR))
+
+from active_learning import batched_encode  # noqa: E402
+from data_utils import data  # noqa: E402
+from metrics import oracle_efficiency  # noqa: E402
+from models.acquisition import acquisition_scores  # noqa: E402
+from models.checkpoints import load_encoder  # noqa: E402
+from models.encoder import MoleculeEncoder  # noqa: E402
+from models.morgan import morgan_features  # noqa: E402
+from models.tabpfn_regressor import TabPFNHead, _load_hf_token  # noqa: E402
 
 # --------------------------------------------------------------------------- #
 # SETTINGS — edit these, then press Run.                                       #
@@ -78,49 +87,26 @@ SAVE_CURVES_TO = "experiments/al_curves.csv"  # per-arm/strategy averaged curves
 
 
 # --------------------------------------------------------------------------- #
-# Featurization — turn the whole pool into numbers ONCE per arm                #
+# Featurization — turn the whole pool into numbers ONCE per arm.               #
+# batched_encode chunks the pool and zeros non-finite rows (src/active_learning).
 # --------------------------------------------------------------------------- #
-def _batched_featurize(featurize, smiles: list[str], device: torch.device, batch: int = 256) -> torch.Tensor:
-    """Encode all SMILES in chunks (so we never build one giant graph) -> [N, d].
-
-    Some molecules encode to NON-FINITE features (e.g. a SMILES that yields an
-    empty graph -> mean over 0 atoms -> NaN). TabPFN's preprocessing indexes on
-    feature values, and a NaN/Inf sends that index out of bounds, which crashes
-    CUDA with a device-side assert. So we scrub non-finite rows to zeros — the
-    same way Morgan treats an unparseable molecule.
-    """
-    rows = []
-    with torch.no_grad():
-        for start in range(0, len(smiles), batch):
-            rows.append(featurize(smiles[start:start + batch]).to(device))
-    X = torch.cat(rows, dim=0)
-    n_bad = int((~torch.isfinite(X)).any(dim=1).sum())
-    if n_bad:
-        print(f"    [warn] {n_bad} molecules had non-finite features -> zeroed")
-    return torch.nan_to_num(X, nan=0.0, posinf=0.0, neginf=0.0)
-
-
 def build_arm_features(arm: str, smiles: list[str], device: torch.device) -> torch.Tensor | None:
     """Precompute the pool's feature matrix for one representation (or None if unavailable)."""
     if arm == "morgan":
-        return _batched_featurize(morgan_features, smiles, device)
+        return batched_encode(morgan_features, smiles, device)
 
     if arm == "untrained_chemprop":
         torch.manual_seed(SEED)  # reproducible random init
         encoder = MoleculeEncoder(hidden_size=HIDDEN_SIZE).eval().to(device)
-        return _batched_featurize(encoder, smiles, device)
+        return batched_encode(encoder, smiles, device)
 
     if arm == "trained_chemprop":
-        path = TRAINED_ENCODER_PATH
-        path = Path(path) if Path(path).is_absolute() else data.REPO_ROOT / path
+        path = Path(TRAINED_ENCODER_PATH)
+        path = path if path.is_absolute() else data.REPO_ROOT / path
         if not path.exists():
             print(f"  [skip] trained_chemprop: no encoder at {path}")
             return None
-        ckpt = torch.load(path, map_location=device)
-        encoder = MoleculeEncoder(hidden_size=ckpt["hidden_size"]).to(device)
-        encoder.load_state_dict(ckpt["state_dict"])
-        encoder.eval()
-        return _batched_featurize(encoder, smiles, device)
+        return batched_encode(load_encoder(path, device), smiles, device)
 
     raise ValueError(f"unknown arm {arm!r}")
 
@@ -192,22 +178,6 @@ def _save_curves(results: dict, budgets: list[int], total_hits: int) -> Path | N
     return out
 
 
-def _efficiency_auc(mean_hits: list[float], budgets: list[int], total_hits: int) -> float:
-    """Hit-finding efficiency vs the ideal oracle, in [0, 1].
-
-    At a budget of b labels the best conceivable strategy finds min(b, total_hits)
-    hits (it would spend every label on a hit). So hits / min(b, total_hits) is
-    "fraction of the oracle" at that budget; averaging over the curve gives a
-    single number where 1.0 = oracle and ~ACTIVE_QUANTILE = random. This reads
-    like an enrichment/hit-rate, which stays interpretable even when the pool has
-    far more hits than the label budget can ever reach.
-    """
-    if total_hits == 0:
-        return float("nan")
-    fractions = [h / min(b, total_hits) for h, b in zip(mean_hits, budgets)]
-    return sum(fractions) / len(fractions)
-
-
 # --------------------------------------------------------------------------- #
 # The experiment                                                              #
 # --------------------------------------------------------------------------- #
@@ -247,7 +217,7 @@ def main() -> None:
             per_seed = [run_one_al(head, X, y, hit_set, strategy, s) for s in range(N_SEEDS)]
             mean_hits = [sum(run[k] for run in per_seed) / N_SEEDS for k in range(N_ROUNDS + 1)]
             results[(arm, strategy)] = mean_hits
-            auc = _efficiency_auc(mean_hits, budgets, total_hits)
+            auc = oracle_efficiency(mean_hits, budgets, total_hits)
             print(f"    {strategy:>7s}: hits@{budgets[-1]}={mean_hits[-1]:5.1f}/{total_hits} "
                   f"| efficiency {auc:.3f}  ({time.time() - t0:.0f}s)")
         # Persist after every arm — the arms already done survive a later crash.
@@ -266,14 +236,14 @@ def main() -> None:
     print("=" * 68)
     print(f"  {'representation':20s} {'strategy':>8s} {'hits@'+str(budgets[-1]):>9s} {'efficiency':>11s}")
     for (arm, strategy), mean_hits in results.items():
-        auc = _efficiency_auc(mean_hits, budgets, total_hits)
+        auc = oracle_efficiency(mean_hits, budgets, total_hits)
         print(f"  {arm:20s} {strategy:>8s} {mean_hits[-1]:>9.1f} {auc:>11.3f}")
 
     # 5. Headline verdict: does the trained encoder beat Morgan and untrained,
     #    using EI, in how fast it finds hits (oracle-efficiency)? Only printed if
     #    all three arms ran (e.g. skipped when running trained-only).
     if all((a, "ei") in results for a in ("morgan", "untrained_chemprop", "trained_chemprop")):
-        auc = {a: _efficiency_auc(results[(a, "ei")], budgets, total_hits) for a in
+        auc = {a: oracle_efficiency(results[(a, "ei")], budgets, total_hits) for a in
                ("morgan", "untrained_chemprop", "trained_chemprop")}
         print("\nVERDICT (EI acquisition, oracle-efficiency; random floor ~"
               f"{ACTIVE_QUANTILE:.2f}):")

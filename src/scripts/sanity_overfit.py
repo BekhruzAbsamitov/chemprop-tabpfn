@@ -53,27 +53,28 @@ if str(SRC_DIR) not in sys.path:
 from data_utils import data  # noqa: E402  (our src/data_utils/data.py)
 from models.encoder import MoleculeEncoder  # noqa: E402
 from models.tabpfn_regressor import TabPFNHead, TARGET_Z_CLIP, _load_hf_token  # noqa: E402
+from training import stable_seed  # noqa: E402
 
 # --------------------------------------------------------------------------- #
 # SETTINGS — edit these, then press Run.                                       #
 # --------------------------------------------------------------------------- #
-N_ASSAYS = 5           # how many tiny assays to try to overfit
-MIN_ASSAY_SIZE = 20    # only use assays with at least this many molecules ...
-MAX_ASSAY_SIZE = 50    # ... and at most this many (the notes: "like 20~50 compounds")
+N_ASSAYS = 5  # how many tiny assays to try to overfit
+MIN_ASSAY_SIZE = 20  # only use assays with at least this many molecules ...
+MAX_ASSAY_SIZE = 50  # ... and at most this many (the notes: "like 20~50 compounds")
 
-N_STEPS = 300          # training steps over the SAME frozen episodes
-LEARNING_RATE = 1e-3   # bigger than the real run's 1e-4: we WANT to overfit fast
-HIDDEN_SIZE = 128      # encoder width (match the real run for a fair diagnosis)
-N_ESTIMATORS = 1       # TabPFN passes to average (1 = fast; fine for a diagnostic)
-LOSS_FN = "nll"        # match the real run: "nll" | "mse" | "huber"
+N_STEPS = 300  # training steps over the SAME frozen episodes
+LEARNING_RATE = 1e-3  # bigger than the real run's 1e-4: we WANT to overfit fast
+HIDDEN_SIZE = 128  # encoder width (match the real run for a fair diagnosis)
+N_ESTIMATORS = 1  # TabPFN passes to average (1 = fast; fine for a diagnostic)
+LOSS_FN = "nll"  # match the real run: "nll" | "mse" | "huber"
 
-CONTEXT_FRAC = 0.5     # fraction of each assay used as context (rest is query)
-CLIP_GRAD_NORM = 1.0   # same gradient clipping as the real training loop
+CONTEXT_FRAC = 0.5  # fraction of each assay used as context (rest is query)
+CLIP_GRAD_NORM = 1.0  # same gradient clipping as the real training loop
 SEED = 0
-PRINT_EVERY = 20       # print the loss curve every N steps
+PRINT_EVERY = 20  # print the loss curve every N steps
 
 # Pass verdict thresholds (only a hint — read the curve yourself too).
-PASS_REL_DROP = 0.30   # final mean loss must be >= this fraction below the start
+PASS_REL_DROP = 0.30  # final mean loss must be >= this fraction below the start
 
 
 # --------------------------------------------------------------------------- #
@@ -95,7 +96,7 @@ def pick_fixed_episodes(rng: random.Random) -> list[data.Episode]:
         ep = data.make_episode(
             assay,
             context_frac=CONTEXT_FRAC,
-            rng=random.Random(hash(assay.assay_id) & 0xFFFF),
+            rng=random.Random(stable_seed(assay.assay_id)),
         )
         if ep is None:  # too small, or context labels nearly identical
             continue

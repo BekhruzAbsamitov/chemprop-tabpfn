@@ -1,7 +1,7 @@
 # Progress Report — Chemprop → TabPFN Trainability
 
 **Author:** Bekhruz Absamitov
-**Date:** 2026-07-20
+**Date:** 2026-07-22
 **For:** Supervision meeting (follow-up to 2026-07-16)
 
 ---
@@ -120,48 +120,49 @@ setting.
 
 ---
 
-## 5. Experiment A — expanded static ranking
+## 5. Experiment A — static ranking of representations
 
-Repeat of the static one-shot ranking, broadened per the notes: **3 targets**
-(S. aureus, D2R, USP7) × **3 representations**, **3 random context/query samples**
-each (200 context / 200 query), all arms scored on the *same* splits.
-Script: `src/scripts/run_experiment_a.py`. Config: CPU, NLL head, static (no
-fine-tuning at eval). Run at **`n_estimators=8` for every arm** — the fair setting
-(see the caveat at the end for why this matters).
+Static one-shot ranking across **3 targets** (S. aureus, D2R, USP7) × **3
+representations**, **3 random context/query samples** each (200 context / 200
+query), all arms scored on the *same* splits, at a fair **`n_estimators=8`**.
+Script: `src/scripts/model_evaluation.py` (CPU, NLL head, no fine-tuning at eval).
 
-**Spearman, mean ± std over 3 samples (higher is better):**
+**Important:** this evaluates the **previously trained** encoder — the one from
+the earlier full-GPU run on the *pre-cleaning* data. The evaluation of the
+**clean-data** encoder (from the currently-queued cluster job) is pending; when
+that finishes, only the `Chemprop-trained` row is re-run.
+
+**Spearman (primary — ranking quality), mean ± std:**
 
 | Representation | S. aureus | D2R | USP7 | **Overall** |
 |---|---|---|---|---|
-| Chemprop-random | 0.388 ± 0.066 | 0.454 ± 0.053 | 0.818 ± 0.029 | **0.553** |
-| Chemprop-trained | 0.376 ± 0.061 | 0.441 ± 0.068 | 0.832 ± 0.024 | **0.550** |
-| Chemeleon | 0.394 ± 0.072 | 0.466 ± 0.040 | 0.843 ± 0.018 | **0.568** |
+| Chemprop-random | 0.332 ± 0.074 | 0.528 ± 0.020 | 0.828 ± 0.025 | **0.562** |
+| Chemprop-trained | 0.329 ± 0.044 | 0.502 ± 0.007 | 0.826 ± 0.023 | **0.553** |
+| Chemeleon | 0.408 ± 0.015 | 0.546 ± 0.066 | 0.858 ± 0.017 | **0.604** |
 
-(R² overall: 0.361 / 0.359 / 0.350 for random / trained / Chemeleon.)
+**R² (secondary — calibration), mean ± std:**
+
+| Representation | S. aureus | D2R | USP7 | **Overall** |
+|---|---|---|---|---|
+| Chemprop-random | 0.096 ± 0.050 | 0.385 ± 0.140 | 0.671 ± 0.037 | **0.384** |
+| Chemprop-trained | 0.084 ± 0.055 | 0.330 ± 0.155 | 0.668 ± 0.045 | **0.361** |
+| Chemeleon | 0.174 ± 0.025 | 0.352 ± 0.171 | 0.726 ± 0.027 | **0.418** |
 
 **Findings:**
-1. **All three representations are statistically tied.** Overall Spearman spans
-   just 0.550–0.568, far inside the ±0.04–0.09 per-cell std bands. For TabPFN at
-   this scale, whether the encoder is a random GNN, a ChEMBL-trained GNN, or a
-   PubChem-pretrained GNN barely changes the ranking.
-2. **Training neither clearly helps nor hurts** once ensembling is fair
-   (trained 0.550 ≈ random 0.553; trained even *beats* random on USP7). This
-   corrects the earlier `n_estimators=1` result — see below.
-3. **Chemeleon is marginally highest** (+0.015 overall) but within noise, and its
-   R² is actually the lowest.
+1. **Chemprop-trained ≤ Chemprop-random on all three targets** (overall Spearman
+   0.553 vs 0.562; R² 0.361 vs 0.384). Training this encoder on ChEMBL is
+   **neutral-to-slightly-negative** for transfer.
+2. **Chemeleon is best on all three** (overall 0.604, +0.04 over random) — a
+   PubChem-pretrained encoder edges ahead of both Chemprop arms.
+3. **With only 3 samples per cell** (±0.04–0.07 std), the Chemprop arms are within
+   noise of each other; the robust read is *representation barely matters for
+   TabPFN at this scale, with Chemeleon marginally ahead.*
 
-**⚠️ Why `n_estimators=8`, and a corrected result.** An earlier run left
-`n_estimators=1`, but TabPFN auto-scales it to 5 for Chemeleon (2048-dim features;
-one estimator covers only 500) while the low-dim Chemprop arms stayed at 1. That
-run showed trained < random on all 3 targets (−0.04 overall) and a bigger Chemeleon
-lead (+0.03). **Both effects largely vanish at a fair `n_estimators=8`**: the
-apparent "training hurts" was mostly low-estimator noise, not a real effect. The
-fair run above is the one to trust.
-
-| Comparison (overall) | n_est=1/5 | n_est=8 (fair) |
-|---|---|---|
-| trained − random | −0.042 ("hurts") | −0.003 (tied) |
-| Chemeleon − random | +0.028 | +0.015 |
+**Methodology note (`n_estimators`).** TabPFN auto-scales `n_estimators` for
+wide-feature arms (Chemeleon's 2048-dim features → 5), so we fix `n_estimators=8`
+for **every** arm to compare fairly. An early `n_estimators=1` run left the
+Chemprop arms at 1 while Chemeleon ran at 5, which understated the Chemprop arms
+and exaggerated an apparent "training hurts" effect that is really within noise.
 
 ---
 
@@ -195,5 +196,6 @@ fair run above is the one to trust.
 
 ---
 
-*Reproduce:* run `src/scripts/sanity_overfit.py` (settings are constants at the
-top of the file).
+*Reproduce:* the sanity check is `src/scripts/sanity_overfit.py`; the static
+ranking (§5) is `src/scripts/model_evaluation.py`. Settings are constants at the
+top of each file.
