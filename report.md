@@ -21,35 +21,36 @@ wiring bug** — it is a data / optimization property of the training task.
 
 ## 2. Overfit sanity check
 
-**Setup.** Freeze 5 tiny ChEMBL-dev assays (10–18 molecules each in context and
-query), reuse the *exact same* episodes every step (so overfitting is possible),
-start from a **randomly initialized** encoder (a warm start would make a low loss
-ambiguous). Everything else — encoder, frozen TabPFN, NLL loss, AdamW, gradient
-clipping — is identical to the real training loop.
+**Setup.** Freeze 5 tiny ChEMBL-dev assays (12–18 molecules each in context and
+query, selected deterministically from the cleaned dev set), reuse the *exact
+same* episodes every step (so overfitting is possible), start from a **randomly
+initialized** encoder (a warm start would make a low loss ambiguous). Everything
+else — encoder, frozen TabPFN, NLL loss, AdamW, gradient clipping — is identical
+to the real training loop.
 
 Config: CPU, `hidden_size=128`, `n_estimators=1`, `loss=nll`, `lr=1e-3`,
-300 steps. Script: `src/scripts/sanity_overfit.py` (one self-contained file).
+300 steps. Script: `src/scripts/sanity_overfit.py`.
 
 **Result.**
 
 | Quantity | Value |
 |---|---|
-| Mean NLL, step 1 | **1.85** |
-| Mean NLL, step 300 | **0.06** |
-| Relative drop | **−96.6 %** |
-| Memorization Spearman (fixed queries, mean) | **0.79** (0.55–0.95 per episode) |
+| Mean NLL, step 1 | **1.44** |
+| Mean NLL, step 300 | **≈ 0** (−0.04) |
+| Drop | **> 100 %** (driven below zero — a bar-distribution NLL is not floored at 0) |
+| Memorization Spearman (fixed queries, mean) | **0.80** (0.75–0.95 per episode) |
 | Gradient flow into encoder | **6 / 10 params non-zero** (see note) |
 
-The loss falls smoothly and monotonically toward zero:
+The loss falls smoothly toward (and below) zero:
 
 ```
-step   1/300 | loss 1.8525
-step  40/300 | loss 1.0729
-step 100/300 | loss 0.9364
-step 160/300 | loss 0.3906
-step 200/300 | loss 0.1659
-step 260/300 | loss 0.1528
-step 300/300 | loss 0.0637
+step   1/300 | loss  1.4369
+step  40/300 | loss  0.8753
+step 100/300 | loss  0.6419
+step 160/300 | loss  0.2912
+step 200/300 | loss  0.0527
+step 260/300 | loss -0.0477
+step 300/300 | loss -0.0359
 ```
 
 **Verdict: PASS.** A correctly-wired model with this capacity *should* be able
@@ -81,10 +82,10 @@ to memorize a handful of tiny assays, and it does.
    though the optimizer needlessly carries 4 dead parameters — an easy cleanup.
 
 2. **Mixed label scales confirmed** (the concern you raised). Among the 5 assays,
-   one is on a raw scale (`[11, 85]`) while the others are log-scale (`[-2, 8]`).
+   one is on a raw scale (`[13.5, 85]`) while the others are log-scale (`[-9, 8]`).
    TabPFN normalizes **per episode**, so within a single assay this is handled
-   (`target_z` std ≈ 1.1, 0 / 69 query labels hit the ±5 clip) and ranking is
-   still learned (Spearman 0.93 on the raw-scale assay). This motivates the open
+   (`target_z` std ≈ 1.1, 0 / 74 query labels hit the ±5 clip) and ranking is
+   still learned (Spearman 0.75 on the raw-scale assay). This motivates the open
    question below.
 
 ---
