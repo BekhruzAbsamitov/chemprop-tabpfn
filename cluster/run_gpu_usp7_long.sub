@@ -1,0 +1,34 @@
+# HTCondor submit file — RQ4 USP7 100k LONG run on one GPU (docker universe).
+# The 2026-07-30 "train it much longer" test, USP7 arm: 100,000 steps over only
+# ~139 train assays (~719 passes) — deep into memorization territory, so if the
+# encoder CAN fit this meta-train set the train loss must fall here.
+# Watch experiments/train_val_curve_usp7_long.csv.
+# Submit from the repo root:  condor_submit cluster/run_gpu_usp7_long.sub
+# Prereq: one-time setup (see cluster/README.md) + train_adaptive_USP7.parquet on
+# the cluster. ~1.5-2 days wall-clock — checkpointed at every eval.
+
+universe                = docker
+docker_image            = pytorch/pytorch:2.3.1-cuda12.1-cudnn8-devel
+executable              = cluster/run_gpu_usp7_long.sh
+
+output                  = runlogs/run_gpu_usp7_long.$(ClusterId).$(ProcId).out
+error                   = runlogs/run_gpu_usp7_long.$(ClusterId).$(ProcId).err
+log                     = runlogs/run_gpu_usp7_long.$(ClusterId).log
+
+should_transfer_files   = YES
+when_to_transfer_output = ON_EXIT
+getenv                  = HOME
+
+request_GPUs            = 1
+request_CPUs            = 4
+# Host RAM (NOT VRAM). Kept low deliberately: the 40 GB GPU machines are
+# partitionable and their free RAM is carved up by other jobs. A 16 GB ask
+# was the ONLY failing condition on freya (8 idle GPUs, 16031 MB free),
+# gerda (5), freyr (3), modi (2), gna (1) — 19 GPUs blocked by 353 MB.
+request_memory          = 7GB
+
+requirements            = (UidDomain == "cs.uni-saarland.de") && (GPUs_GlobalMemoryMb >= 40000)
++WantGPUHomeMounted     = true
++WantScratchMounted     = true
+
+queue 1

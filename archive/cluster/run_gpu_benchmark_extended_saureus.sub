@@ -1,0 +1,29 @@
+# HTCondor submit file — the two S. aureus extended-benchmark jobs that first ran on the
+# uncorrected pool (205663.0 and .1), re-run on the corrected pool (2026-10-07). The third,
+# chemprop_untrained (205663.8), was held before it started: release it instead.
+# Move experiments/benchmark_extended/acquisition_saureus_*.csv away first (refuses to overwrite).
+# Submit from the repo root:  condor_submit cluster/run_gpu_benchmark_extended_saureus.sub
+universe                = docker
+docker_image            = pytorch/pytorch:2.3.1-cuda12.1-cudnn8-devel
+executable              = cluster/run_gpu_benchmark_extended.sh
+arguments               = $(EXPERIMENT) $(TARGET) $(REPRESENTATION)
+output                  = runlogs/run_gpu_benchmark_extended_$(EXPERIMENT)_$(TARGET)_$(REPRESENTATION).$(ClusterId).out
+error                   = runlogs/run_gpu_benchmark_extended_$(EXPERIMENT)_$(TARGET)_$(REPRESENTATION).$(ClusterId).err
+log                     = runlogs/run_gpu_benchmark_extended.$(ClusterId).log
+
+should_transfer_files   = YES
+when_to_transfer_output = ON_EXIT
+getenv                  = HOME
+
+request_GPUs            = 1
+request_CPUs            = 4
+request_memory          = 4GB
+require_gpus            = (GlobalMemoryMb >= 40000)
+requirements            = UidDomain == "cs.uni-saarland.de"
++WantGPUHomeMounted     = true
++WantScratchMounted     = true
+
+queue EXPERIMENT, TARGET, REPRESENTATION from (
+    acquisition, saureus, chemeleon
+    acquisition, saureus, morgan
+)

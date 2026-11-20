@@ -1,0 +1,54 @@
+# HTCondor submit file — how many candidates fit in ONE TabPFN predict call on an A100-PCIe-40GB (2026-11-13).
+#
+# Why. Supervision of 12 Nov on the runtime study: "1000 molecules for timing — does predicting on that sample
+# exhaust what is possible with a 40GB A100 GPU? try if more fits in one model.predict step?" The runtime sweep
+# (experiments/runtime_study_a100.csv) scored 1,000 candidates and the whole S. aureus pool (about 31,000) in one
+# call, but recorded no GPU memory and went no further. src/scripts/runtime_capacity.py makes one predict call for
+# 1,000 to 1,000,000 candidates (the pool's molecules repeated), for two representations and two labelled-set
+# sizes, and records the time and the peak GPU memory of each call, or the error that stopped it.
+#
+# Output: experiments/runtime_capacity_a100.csv. The script refuses to start on any other GPU and refuses to
+# overwrite its output. It writes a row with status "started" before every attempt and runs the sizes in ascending
+# order, so if the job is removed for exceeding its host memory (see request_memory), the file ends with the
+# "started" row of the setting it died in and every smaller size is saved.
+# Expected run time: about an hour.
+#
+# Before submitting, on the cluster:
+#   1. src/scripts/runtime_capacity.py and cluster/run_gpu_capacity.sh must be there (cluster/sync.sh push);
+#   2. experiments/runtime_capacity_a100.csv must not exist;
+#   3. mkdir -p runlogs
+#
+#   condor_submit -dry-run /dev/null cluster/run_gpu_capacity_a100.sub    # validate only
+#   condor_submit cluster/run_gpu_capacity_a100.sub
+#
+# If the dry run rejects the DeviceName expression, use this one instead (the 40 GB A100s):
+#   require_gpus = (Capability == 8.0 && GlobalMemoryMb < 50000)
+#
+# Afterwards, copy experiments/runtime_capacity_a100.csv and the three runlogs/run_gpu_capacity_a100.* files back.
+universe                = docker
+docker_image            = pytorch/pytorch:2.3.1-cuda12.1-cudnn8-devel
+executable              = cluster/run_gpu_capacity.sh
+output                  = runlogs/run_gpu_capacity_a100.$(ClusterId).out
+error                   = runlogs/run_gpu_capacity_a100.$(ClusterId).err
+log                     = runlogs/run_gpu_capacity_a100.$(ClusterId).log
+
+should_transfer_files   = YES
+when_to_transfer_output = ON_EXIT
+getenv                  = HOME
+
+request_GPUs            = 1
+request_CPUs            = 4
+# HOST RAM, not GPU memory. The large candidate sets need more than the 7 GB of the runtime sweep: the input matrix
+# alone is up to 3 GB (MAX_INPUT_GB in the script) and TabPFN copies it. 12 GB is a compromise: the A100 hosts are
+# partitionable and a 16 GB request once left jobs IDLE beside free GPUs. If this job stays IDLE, lower it to 10GB
+# (and MAX_INPUT_GB in the script to 2.0); if it is removed for exceeding memory, the CSV shows at which setting.
+request_memory          = 12GB
+require_gpus            = (DeviceName == "NVIDIA A100-PCIE-40GB")
+requirements            = UidDomain == "cs.uni-saarland.de"
++WantGPUHomeMounted     = true
++WantScratchMounted     = true
+
+# As in the runtime sweep. It only widens the machines that accept the job; the GPU model is fixed by require_gpus.
++MaxJobRetirementTime   = 28800
+
+queue 1

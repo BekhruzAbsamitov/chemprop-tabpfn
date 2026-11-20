@@ -1,0 +1,32 @@
+# HTCondor submit file — RE-EVALUATE the 50-epoch run's saved checkpoints.
+#
+# Recomputes the full validation (3,497 episodes, 40,966 points) for epochs 0, 23, 24,
+# 25 and 26. Epochs 25-26 were never recorded (the requeued job overwrote the log on
+# 2026-10-01); 0, 23 and 24 are known and measure the GPU run-to-run noise.
+# ~70 min per checkpoint -> ~6 h. Output: experiments/val_reevaluated_full_sp_50ep.csv
+# (written row by row; the script refuses to overwrite an existing file, so a requeue
+# cannot destroy a finished result).
+#
+# Submit from the repo root:  condor_submit cluster/run_gpu_reevaluate_epochs.sub
+
+universe                = docker
+docker_image            = pytorch/pytorch:2.3.1-cuda12.1-cudnn8-devel
+executable              = cluster/run_gpu_reevaluate_epochs.sh
+
+output                  = runlogs/run_gpu_reevaluate_epochs.$(ClusterId).$(ProcId).out
+error                   = runlogs/run_gpu_reevaluate_epochs.$(ClusterId).$(ProcId).err
+log                     = runlogs/run_gpu_reevaluate_epochs.$(ClusterId).log
+
+should_transfer_files   = YES
+when_to_transfer_output = ON_EXIT
+getenv                  = HOME
+
+request_GPUs            = 1
+request_CPUs            = 4
+request_memory          = 7GB
+
+requirements            = (UidDomain == "cs.uni-saarland.de") && (GPUs_GlobalMemoryMb >= 40000)
++WantGPUHomeMounted     = true
++WantScratchMounted     = true
+
+queue 1

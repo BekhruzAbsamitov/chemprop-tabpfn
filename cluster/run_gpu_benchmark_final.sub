@@ -1,0 +1,107 @@
+# HTCondor submit file — the FINAL AL benchmark run (2026-11-04): one complete run that
+# replaces the primary benchmark, its three RQ4 transfer runs and the extended acquisition
+# experiment (benchmark_extended.py, experiments "final" and "final_subsampling").
+#
+#   final              62 jobs, one per (target, representation): 14 shared representations
+#                      (incl. the seed-1 replicate of the epoch-level encoder, epochs 21 and 26)
+#                      plus each target's own encoder at two training lengths (none on TYK2);
+#                      TabPFN, RF, RBF GP and Tanimoto GP, all on every representation; greedy, EI and PI at
+#                      y+ and y_thresh, for TabPFN from the Gaussian form AND the bar
+#                      distribution; 4 budget configurations x 5 seeds; 1,000 candidates/round.
+#   final_subsampling  2 jobs (USP7, D2R; CheMeleon): the same criteria scoring every
+#                      untested molecule, compared with the 1,000-candidate arms of "final".
+#
+# Outputs: experiments/benchmark_final/<experiment>_<target>_<representation>.csv, per seed
+# and per round. A requeued job RESUMES its file (finished campaigns kept, a cut-off one
+# re-run), so never submit this file twice while jobs from it are still queued or running.
+# Longest jobs first. Day-long jobs, so no MaxJobRetirementTime.
+#
+# Submit from the repo root, after `mkdir -p runlogs`:
+#   condor_submit -dry-run /dev/null cluster/run_gpu_benchmark_final.sub   # validate only
+#   condor_submit cluster/run_gpu_benchmark_final.sub
+universe                = docker
+docker_image            = pytorch/pytorch:2.3.1-cuda12.1-cudnn8-devel
+executable              = cluster/run_gpu_benchmark_extended.sh
+arguments               = $(EXPERIMENT) $(TARGET) $(REPRESENTATION)
+output                  = runlogs/run_gpu_benchmark_final_$(EXPERIMENT)_$(TARGET)_$(REPRESENTATION).$(ClusterId).out
+error                   = runlogs/run_gpu_benchmark_final_$(EXPERIMENT)_$(TARGET)_$(REPRESENTATION).$(ClusterId).err
+log                     = runlogs/run_gpu_benchmark_final.$(ClusterId).log
+
+should_transfer_files   = YES
+when_to_transfer_output = ON_EXIT
+getenv                  = HOME
+
+request_GPUs            = 1
+request_CPUs            = 4
+request_memory          = 7GB
+require_gpus            = (GlobalMemoryMb >= 40000)
+requirements            = UidDomain == "cs.uni-saarland.de"
++WantGPUHomeMounted     = true
++WantScratchMounted     = true
+
+queue EXPERIMENT, TARGET, REPRESENTATION from (
+    final_subsampling, usp7,    chemeleon
+    final_subsampling, d2r,     chemeleon
+    final,             saureus, morgan
+    final,             saureus, mordred3d
+    final,             saureus, chemeleon
+    final,             tyk2,    morgan
+    final,             tyk2,    mordred3d
+    final,             tyk2,    chemeleon
+    final,             usp7,    morgan
+    final,             usp7,    mordred3d
+    final,             usp7,    chemeleon
+    final,             d2r,     morgan
+    final,             d2r,     mordred3d
+    final,             d2r,     chemeleon
+    final,             saureus, physchem
+    final,             saureus, chemprop_untrained
+    final,             saureus, chemprop_trained_full
+    final,             saureus, chemprop_trained_full_sp
+    final,             saureus, chemprop_trained_full_sp_best
+    final,             saureus, chemprop_trained_full_sp_10ep
+    final,             saureus, chemprop_trained_full_sp_10ep_best
+    final,             saureus, chemprop_trained_full_sp_50ep_best
+    final,             saureus, chemprop_trained_full_sp_50ep_final
+    final,             saureus, chemprop_trained_full_sp_50ep_seed1_best
+    final,             saureus, chemprop_trained_full_sp_50ep_seed1_final
+    final,             saureus, chemprop_trained_own_saureus
+    final,             saureus, chemprop_trained_own_saureus_long
+    final,             tyk2,    physchem
+    final,             tyk2,    chemprop_untrained
+    final,             tyk2,    chemprop_trained_full
+    final,             tyk2,    chemprop_trained_full_sp
+    final,             tyk2,    chemprop_trained_full_sp_best
+    final,             tyk2,    chemprop_trained_full_sp_10ep
+    final,             tyk2,    chemprop_trained_full_sp_10ep_best
+    final,             tyk2,    chemprop_trained_full_sp_50ep_best
+    final,             tyk2,    chemprop_trained_full_sp_50ep_final
+    final,             tyk2,    chemprop_trained_full_sp_50ep_seed1_best
+    final,             tyk2,    chemprop_trained_full_sp_50ep_seed1_final
+    final,             usp7,    physchem
+    final,             usp7,    chemprop_untrained
+    final,             usp7,    chemprop_trained_full
+    final,             usp7,    chemprop_trained_full_sp
+    final,             usp7,    chemprop_trained_full_sp_best
+    final,             usp7,    chemprop_trained_full_sp_10ep
+    final,             usp7,    chemprop_trained_full_sp_10ep_best
+    final,             usp7,    chemprop_trained_full_sp_50ep_best
+    final,             usp7,    chemprop_trained_full_sp_50ep_final
+    final,             usp7,    chemprop_trained_full_sp_50ep_seed1_best
+    final,             usp7,    chemprop_trained_full_sp_50ep_seed1_final
+    final,             usp7,    chemprop_trained_own_usp7
+    final,             usp7,    chemprop_trained_own_usp7_long
+    final,             d2r,     physchem
+    final,             d2r,     chemprop_untrained
+    final,             d2r,     chemprop_trained_full
+    final,             d2r,     chemprop_trained_full_sp
+    final,             d2r,     chemprop_trained_full_sp_best
+    final,             d2r,     chemprop_trained_full_sp_10ep
+    final,             d2r,     chemprop_trained_full_sp_10ep_best
+    final,             d2r,     chemprop_trained_full_sp_50ep_best
+    final,             d2r,     chemprop_trained_full_sp_50ep_final
+    final,             d2r,     chemprop_trained_full_sp_50ep_seed1_best
+    final,             d2r,     chemprop_trained_full_sp_50ep_seed1_final
+    final,             d2r,     chemprop_trained_own_d2r
+    final,             d2r,     chemprop_trained_own_d2r_long
+)

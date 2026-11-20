@@ -1,0 +1,33 @@
+# HTCondor submit file — re-run S. aureus inside the earlier benchmark runs, on the corrected
+# pool (2026-10-07). One job per run preset; each writes
+# experiments/al_benchmark_parts[_<tag>]/saureus.csv and refuses to overwrite it, so MOVE THE
+# OLD S. aureus PART FILES AWAY FIRST. The 50-epoch run's S. aureus job (205698.0) is not here:
+# release it instead (it already runs the 50ep preset).
+# Submit from the repo root:  condor_submit cluster/run_gpu_benchmark_rerun.sub
+universe                = docker
+docker_image            = pytorch/pytorch:2.3.1-cuda12.1-cudnn8-devel
+executable              = cluster/run_gpu_benchmark_rerun.sh
+arguments               = $(TARGET) $(RUN)
+
+output                  = runlogs/run_gpu_benchmark_rerun_$(TARGET)_$(RUN).$(ClusterId).out
+error                   = runlogs/run_gpu_benchmark_rerun_$(TARGET)_$(RUN).$(ClusterId).err
+log                     = runlogs/run_gpu_benchmark_rerun.$(ClusterId).log
+
+should_transfer_files   = YES
+when_to_transfer_output = ON_EXIT
+getenv                  = HOME
+
+request_GPUs            = 1
+request_CPUs            = 4
+request_memory          = 7GB
+require_gpus            = (GlobalMemoryMb >= 40000)
+
+requirements            = UidDomain == "cs.uni-saarland.de"
++WantGPUHomeMounted     = true
++WantScratchMounted     = true
+
+queue TARGET, RUN from (
+    saureus, primary
+    saureus, fullsp
+    saureus, 10ep
+)

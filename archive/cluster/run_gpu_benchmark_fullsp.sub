@@ -1,0 +1,49 @@
+# HTCondor submit file — FOCUSED AL benchmark for the RETRAINED single-protein encoder.
+# Four arms (ONLY_REPRESENTATIONS in benchmark_al.py): the full_sp encoder at its final
+# step and at its peak-val checkpoint, against chemprop_untrained (the control it must
+# beat) and chemeleon (the strong static reference).
+#
+# THE QUESTION: full_sp is the first run whose IN-DOMAIN val_spearman rose significantly
+# above its own baseline (§5h). But §5e measures TRANSFER to four external targets, and
+# in-domain gains have failed to transfer before (§5b). This run decides which it is.
+#
+# It is also nearly leakage-free — 4.4 % / 0 % / 0 % / 1.2 % against the four pools,
+# where the old full-ChEMBL encoder was 77 % and 91 % — so unlike §5e's trained arm this
+# one is interpretable on ALL FOUR targets.
+#
+# chemeleon and chemprop_untrained are shared with the "rigr" run as a consistency check:
+# both post-date the maintain_order fix, so their numbers should match exactly.
+#
+# Prereq: experiments/trained_encoder_full_sp{,_best}.pt synced to the cluster.
+# Submit from the repo root:  condor_submit cluster/run_gpu_benchmark_fullsp.sub
+
+universe                = docker
+docker_image            = pytorch/pytorch:2.3.1-cuda12.1-cudnn8-devel
+executable              = cluster/run_gpu_benchmark_fullsp.sh
+arguments               = $(TARGET)
+
+output                  = runlogs/run_gpu_benchmark_fullsp_$(TARGET).$(ClusterId).out
+error                   = runlogs/run_gpu_benchmark_fullsp_$(TARGET).$(ClusterId).err
+log                     = runlogs/run_gpu_benchmark_fullsp.$(ClusterId).log
+
+should_transfer_files   = YES
+when_to_transfer_output = ON_EXIT
+getenv                  = HOME
+
+request_GPUs            = 1
+request_CPUs            = 4
+# Host RAM (NOT VRAM), kept low on purpose: the 40 GB GPU machines are
+# partitionable and their free RAM is carved up by other jobs, so a large ask
+# leaves the job IDLE next to idle GPUs (see report.md §7).
+request_memory          = 7GB
+# Chemeleon is 2048-d; require the 40 GB tier that the first benchmark ran on.
+require_gpus            = (GlobalMemoryMb >= 40000)
+
+requirements            = UidDomain == "cs.uni-saarland.de"
++WantGPUHomeMounted     = true
++WantScratchMounted     = true
+
+# One job per target. They are fully independent, so this turns a single ~30 h
+# sequential sweep into four concurrent jobs (~8 h wall-clock). Each writes its
+# own experiments/al_benchmark_<target>.csv; merge them afterwards.
+queue TARGET in (saureus, tyk2, usp7, d2r)

@@ -1,0 +1,46 @@
+# HTCondor submit file — FOCUSED AL benchmark for the supervisor's pretrained RIGR
+# encoder (2026-08-20 supervision). Five arms only, set by ONLY_REPRESENTATIONS in
+# benchmark_al.py: rigr_pretrained, its matched rigr_untrained control, plus chemeleon /
+# chemprop_untrained / morgan as references. 600 campaigns per target instead of 1,200.
+#
+# WHY A SEPARATE RUN, not merged into experiments/al_benchmark.csv: §5e comparisons are
+# PAIRED within a run, which requires all arms to have seen the same pool in the same
+# order. The 2026-08-24 `maintain_order` fix to data.load_target changed that ordering,
+# so new rows cannot be paired against the pre-fix August results. This run therefore
+# carries its own reference arms and is analysed only against itself. RUN_TAG="rigr"
+# keeps its outputs (al_benchmark_rigr.csv, al_benchmark_parts_rigr/) clear of the
+# existing full-grid data.
+#
+# Prereq: data/weights/chemicl_mpnn.pt synced to the cluster.
+# Submit from the repo root:  condor_submit cluster/run_gpu_benchmark_rigr.sub
+
+universe                = docker
+docker_image            = pytorch/pytorch:2.3.1-cuda12.1-cudnn8-devel
+executable              = cluster/run_gpu_benchmark_rigr.sh
+arguments               = $(TARGET)
+
+output                  = runlogs/run_gpu_benchmark_rigr_$(TARGET).$(ClusterId).out
+error                   = runlogs/run_gpu_benchmark_rigr_$(TARGET).$(ClusterId).err
+log                     = runlogs/run_gpu_benchmark_rigr.$(ClusterId).log
+
+should_transfer_files   = YES
+when_to_transfer_output = ON_EXIT
+getenv                  = HOME
+
+request_GPUs            = 1
+request_CPUs            = 4
+# Host RAM (NOT VRAM), kept low on purpose: the 40 GB GPU machines are
+# partitionable and their free RAM is carved up by other jobs, so a large ask
+# leaves the job IDLE next to idle GPUs (see report.md §7).
+request_memory          = 7GB
+# Chemeleon is 2048-d; require the 40 GB tier that the first benchmark ran on.
+require_gpus            = (GlobalMemoryMb >= 40000)
+
+requirements            = UidDomain == "cs.uni-saarland.de"
++WantGPUHomeMounted     = true
++WantScratchMounted     = true
+
+# One job per target. They are fully independent, so this turns a single ~30 h
+# sequential sweep into four concurrent jobs (~8 h wall-clock). Each writes its
+# own experiments/al_benchmark_<target>.csv; merge them afterwards.
+queue TARGET in (saureus, tyk2, usp7, d2r)

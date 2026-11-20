@@ -1,0 +1,45 @@
+# HTCondor submit file — AL benchmark for the 10-EPOCH encoder.
+# Five arms (ONLY_REPRESENTATIONS in benchmark_al.py): the 10-epoch encoder at its final
+# and peak-val checkpoints, the 3.19-epoch encoder for a paired within-run comparison,
+# chemprop_untrained (the control all must beat) and chemeleon (the static reference).
+#
+# WHY: §5h answers CONVERGENCE at 10 epochs but TRANSFER only at 3.19. Reporting
+# convergence for one encoder and transfer for another leaves the obvious question open,
+# so this closes it at the longest training. All three trained arms share the same
+# training parquet, so leakage is identical (4.4 / 0 / 0 / 1.2 %) and they are directly
+# comparable.
+#
+# Prereq: experiments/trained_encoder_full_sp_10ep{,_best}.pt on the cluster (written
+# there by the training run).
+# Submit from the repo root:  condor_submit cluster/run_gpu_benchmark_10ep.sub
+
+universe                = docker
+docker_image            = pytorch/pytorch:2.3.1-cuda12.1-cudnn8-devel
+executable              = cluster/run_gpu_benchmark_10ep.sh
+arguments               = $(TARGET)
+
+output                  = runlogs/run_gpu_benchmark_10ep_$(TARGET).$(ClusterId).out
+error                   = runlogs/run_gpu_benchmark_10ep_$(TARGET).$(ClusterId).err
+log                     = runlogs/run_gpu_benchmark_10ep.$(ClusterId).log
+
+should_transfer_files   = YES
+when_to_transfer_output = ON_EXIT
+getenv                  = HOME
+
+request_GPUs            = 1
+request_CPUs            = 4
+# Host RAM (NOT VRAM), kept low on purpose: the 40 GB GPU machines are
+# partitionable and their free RAM is carved up by other jobs, so a large ask
+# leaves the job IDLE next to idle GPUs (see report.md §7).
+request_memory          = 7GB
+# Chemeleon is 2048-d; require the 40 GB tier that the first benchmark ran on.
+require_gpus            = (GlobalMemoryMb >= 40000)
+
+requirements            = UidDomain == "cs.uni-saarland.de"
++WantGPUHomeMounted     = true
++WantScratchMounted     = true
+
+# One job per target. They are fully independent, so this turns a single ~30 h
+# sequential sweep into four concurrent jobs (~8 h wall-clock). Each writes its
+# own experiments/al_benchmark_<target>.csv; merge them afterwards.
+queue TARGET in (saureus, tyk2, usp7, d2r)

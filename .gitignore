@@ -1,0 +1,52 @@
+# uv environments and config
+.venv/
+uv.lock
+
+# PyTorch & Model Weights
+*.pt
+*.pth
+*.ckpt
+
+# Data
+data/raw/
+data/curated/
+# Cached Mordred/descriptor arrays (large, regenerable). NOTE: the comment must be
+# on its own line — git does NOT strip trailing comments, so `data/features/  # ...`
+# is treated as a literal pattern and matches nothing.
+data/features/
+*.csv
+*.sdf
+
+# Secrets / local env (keep .env.example, ignore the real one)
+.env
+.env.local
+
+# Experiment outputs and cluster job logs
+experiments/
+cluster/logs/
+
+# PyCharm and Jupyter
+.idea/
+.ipynb_checkpoints/
+__pycache__/
+# macOS
+.DS_Store
+
+# Condor job logs — written on the cluster, pulled down by cluster/sync.sh.
+# Machine-generated and bulky (171 files); findings from them live in report.md.
+runlogs/
+
+# Working notes, supervision feedback, downloaded papers and internal reports: local only.
+notes/
+report.md
+rq4_report.md
+methodology_facts.md
+
+# Editor and assistant settings
+.vscode/
+.claude/
+.mcp.json
+.pytest_cache/
+
+# Cluster login for cluster/sync.sh
+cluster/remote.local

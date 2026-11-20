@@ -1,0 +1,30 @@
+# HTCondor submit file — RQ4 S. aureus 100k LONG run on one GPU (docker universe).
+# The 2026-07-30 "train it much longer" test, S. aureus arm: 100,000 steps over
+# ~802 train assays (~125 passes). The 8k run ended BELOW its step-0 baseline
+# (0.203 vs 0.248) — this checks whether that is drift/noise or a real trend.
+# Watch experiments/train_val_curve_saureus_long.csv.
+# Submit from the repo root:  condor_submit cluster/run_gpu_saureus_long.sub
+# Prereq: one-time setup (see cluster/README.md) + train_adaptive_S_aureus.parquet
+# on the cluster. ~1.5-2 days wall-clock — checkpointed at every eval.
+
+universe                = docker
+docker_image            = pytorch/pytorch:2.3.1-cuda12.1-cudnn8-devel
+executable              = cluster/run_gpu_saureus_long.sh
+
+output                  = runlogs/run_gpu_saureus_long.$(ClusterId).$(ProcId).out
+error                   = runlogs/run_gpu_saureus_long.$(ClusterId).$(ProcId).err
+log                     = runlogs/run_gpu_saureus_long.$(ClusterId).log
+
+should_transfer_files   = YES
+when_to_transfer_output = ON_EXIT
+getenv                  = HOME
+
+request_GPUs            = 1
+request_CPUs            = 4
+request_memory          = 7GB
+
+requirements            = (UidDomain == "cs.uni-saarland.de") && (GPUs_GlobalMemoryMb >= 40000)
++WantGPUHomeMounted     = true
++WantScratchMounted     = true
+
+queue 1

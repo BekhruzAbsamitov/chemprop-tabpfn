@@ -1,0 +1,27 @@
+# HTCondor submit file — full-scale active-learning run on one GPU (docker universe).
+# Submit from the repo root:  condor_submit cluster/run_al.sub
+# Prereqs: the one-time setup (see cluster/README.md) AND
+#          experiments/trained_encoder_full.pt from the run_gpu.sub job
+#          (needed for the trained_chemprop arm; it's skipped otherwise).
+
+universe                = docker
+docker_image            = pytorch/pytorch:2.3.1-cuda12.1-cudnn8-devel
+executable              = cluster/run_al.sh
+
+output                  = runlogs/run_al.$(ClusterId).$(ProcId).out
+error                   = runlogs/run_al.$(ClusterId).$(ProcId).err
+log                     = runlogs/run_al.$(ClusterId).log
+
+should_transfer_files   = YES
+when_to_transfer_output = ON_EXIT
+getenv                  = HOME
+
+request_GPUs            = 1
+request_CPUs            = 8
+request_memory          = 64GB
+
+requirements            = UidDomain == "cs.uni-saarland.de"
++WantGPUHomeMounted     = true
++WantScratchMounted     = true
+
+queue 1
