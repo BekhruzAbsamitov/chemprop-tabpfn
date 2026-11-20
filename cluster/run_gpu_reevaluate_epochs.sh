@@ -1,17 +1,13 @@
 #!/bin/bash
-# The program HTCondor runs INSIDE the docker container to RE-EVALUATE saved epoch
-# checkpoints of the 50-epoch run (see src/scripts/reevaluate_epochs.py).
-# It uses the uv environment + Hugging Face cache that cluster/setup_env.sh
-# prepared once in your (mounted) home directory.
+# Runs inside the docker container: reevaluate_epochs.py.
 set -euo pipefail
 
-# TODO: set this to where your repo lives in your home directory on the cluster.
+# Where the repository lives in your home directory on the cluster.
 REPO="$HOME/chemprop-tabpfn"
 cd "$REPO"
 
-# Keep a separate, timestamped copy of this start's output. If HTCondor requeues the job,
-# the restart writes to the same .out file and would erase the first start's log (that is
-# how the original 50-epoch run's per-epoch log was lost on 2026-10-01).
+# Keep a separate, timestamped copy of this start's output: if HTCondor requeues the job,
+# the restart would otherwise overwrite the .out file of the first start.
 mkdir -p runlogs
 exec > >(tee -a "runlogs/reevaluate_epochs.$(date -u +%Y%m%dT%H%M%SZ).tee.log") 2>&1
 
@@ -35,8 +31,6 @@ test -f data/curated/chembl36_single_protein_clean.parquet || {
   exit 1
 }
 
-# src/ on the path so 'from models.../from data_utils...' imports resolve.
-# PYTHONUNBUFFERED=1 so prints appear in the log live instead of being buffered.
 test -d experiments/trained_encoder_full_sp_50ep_epochs || {
   echo "MISSING experiments/trained_encoder_full_sp_50ep_epochs"; exit 1; }
 

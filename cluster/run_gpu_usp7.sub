@@ -1,10 +1,8 @@
-# HTCondor submit file — RQ4 USP7 *adaptive* run on one GPU (docker universe).
-# Trains on the domain-matched, leakage-free protease set (train_adaptive_USP7.parquet)
-# instead of all-of-ChEMBL, then watch experiments/train_val_curve_usp7.csv.
-# Submit from the repo root:  condor_submit cluster/run_gpu_usp7.sub
-# Prereq: run the one-time setup first (see cluster/README.md), and make sure
-# train_adaptive_USP7.parquet exists on the cluster (build it, or scp it over).
-
+# Encoder training on the domain-matched USP7 set (run_experiment.py, preset "usp7").
+# Needs data/curated/train_adaptive_USP7.parquet on the cluster.
+# Validation curve: experiments/train_val_curve_usp7.csv
+# Submit from the repository root, after `mkdir -p runlogs`:
+#   condor_submit cluster/run_gpu_usp7.sub
 universe                = docker
 docker_image            = pytorch/pytorch:2.3.1-cuda12.1-cudnn8-devel
 executable              = cluster/run_gpu_usp7.sh

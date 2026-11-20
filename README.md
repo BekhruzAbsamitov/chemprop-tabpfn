@@ -1,81 +1,81 @@
-# Chemprop → TabPFN for Active Learning in Drug Discovery
+# Exploring Tabular Foundation Models for Active Learning in Drug Discovery
 
-Master's thesis code (Bekhruz Absamitov). The idea in one sentence:
+Code for the Master's thesis of Bekhruz Absamitov (Saarland University).
 
-> Train a **Chemprop** graph network to turn a molecule into numbers that a frozen
-> **TabPFN** model likes best, so TabPFN predicts molecular activity more accurately.
+In early drug discovery, active learning chooses which compounds to measure next, so that a limited
+budget finds as many actives as possible. The thesis uses **TabPFN**, a tabular foundation model, as
+the surrogate model that guides these choices, and asks four questions:
 
-**Chemprop** reads a molecule (from its SMILES string) and produces a numeric
-"fingerprint". **TabPFN** is a frozen tabular foundation model that takes those
-numbers and predicts activity. We let gradients flow from TabPFN's prediction
-error *back into* Chemprop, so Chemprop learns a representation tailored to
-TabPFN. The research question: **does training Chemprop this way actually
-make TabPFN better than off-the-shelf molecular features?**
+1. Is TabPFN a better surrogate for hit discovery than a random forest and Gaussian processes?
+2. Does its predictive uncertainty improve the acquisition of compounds?
+3. How much does the molecular representation matter?
+4. Can a **Chemprop** message-passing encoder be trained through the frozen TabPFN, so that it
+   learns a representation tailored to it?
+
+The first three are answered by simulated active learning campaigns on four pools (D2R, USP7, TYK2
+and a whole-cell *S. aureus* screen). For the fourth, the encoder is meta-trained on bioactivity
+assays from ChEMBL, with gradients flowing from TabPFN's prediction error back into Chemprop.
+
+## Main results
+
+- TabPFN is the strongest surrogate, but modestly: it ends ahead of the random forest by
+  0.22 ± 0.05 in cumulative enrichment factor, although not on every target, and it costs more per
+  candidate.
+- Expected Improvement over the best value so far loses to greedy selection on every target. The
+  probability of exceeding the hit threshold beats greedy selection on three of four targets.
+- CheMeleon, a pretrained encoder, is the best representation for TabPFN.
+- The encoder trained through TabPFN receives gradients and improves on held-out assays, but does
+  not transfer usefully to new targets.
+
+The thesis has the details: the benchmark in Chapter 4, the encoder training in Chapter 5.
+
+---
+
+## Setup
+
+Python 3.12 or 3.13 and [uv](https://docs.astral.sh/uv/) are required.
+
+```bash
+uv sync                  # builds .venv from pyproject.toml
+cp .env.example .env     # then put your Hugging Face token into .env
+```
+
+The TabPFN checkpoint is downloaded from a gated Hugging Face repository, so the account behind
+`HF_TOKEN` must have accepted access to it (`.env.example` explains this). `tabpfn` is pinned to
+8.1.0, the version every result was produced with; later versions change the numerics.
+
+## Running
+
+Each script in `src/scripts/` is one self-contained file. Its settings are constants at the top of
+the file: open it in the IDE, edit them and press Run. No environment variables or `PYTHONPATH` are
+needed. From a terminal:
+
+```bash
+uv run python src/scripts/run_experiment.py     # the default preset is a fast local run
+uv run pytest                                   # unit tests
+```
+
+The benchmark and the full-scale training runs need a GPU and were run on an HTCondor cluster;
+`cluster/README.md` describes the set-up, and `cluster/sync.sh` copies code and results between
+the laptop and the cluster.
 
 ---
 
 ## The data
 
-Everything lives in `data/`. There are three files.
+No data and no model weights are in the repository. The scripts expect their input files under
+`data/`; each script names the files it reads and writes as constants at its top, and results go
+to `experiments/`.
 
-### 1. `data/curated/chembl36_curated.parquet` — the full dataset
-The complete, cleaned ChEMBL activity dataset (produced by the supervisor's
-curation notebook). This is the "everything" file used for large-scale training.
-
-| | |
-|---|---|
-| Rows (activity measurements) | **4,472,273** |
-| Columns | 42 |
-| Unique assays (`assay_x_type_x_doc`) | **248,060** |
-| Unique compounds (`compound_chembl_id`) | 1,509,947 |
-| Split (train / val / test) | 3,134,043 / 673,001 / 665,229 |
-
-### 2. `data/curated/chembl36_dev.parquet` — the small dev subset
-A **small, reproducible sample** drawn from the curated file (~1% of the assays),
-with the **same 42 columns and the same split labels**. Use this for fast local
-experiments so you don't wait on the 4.5-million-row file. Same shape, same code
-path — just smaller.
-
-| | |
-|---|---|
-| Rows | **46,257** |
-| Columns | 42 (identical schema to curated) |
-| Unique assays | **2,481** |
-| Unique compounds | 41,476 |
-| Split (train / val / test) | 32,592 / 7,140 / 6,525 |
-
-**curated vs dev:** dev is a subset of curated — same schema, same meaning,
-roughly 1% the size. Develop and debug on `dev`; run the real thing on
-`curated` (on the GPU cluster).
-
-### 3. `~/University/thesis/data/s_aureus_curated_with_scores_filtered.csv` — the target
-The real evaluation target: *S. aureus* antibacterial screening data. This is the
-dataset the thesis compares models on in the active-learning loop.
-
-| | |
-|---|---|
-| Molecules (unique SMILES) | ~40,270 |
-| Key columns | `Smiles` (molecule), `pMIC` (potency; higher = more potent) |
-| pMIC range | 0 – 8.1 (mean ≈ 1.3) |
-
-### The columns that matter
-Both parquet files share these key columns:
-
-| Column | Meaning |
-|---|---|
-| `assay_x_type_x_doc` | **Assay id** — one assay = one prediction task (TabPFN learns "in context" per assay) |
-| `canonical_smiles` | The molecule, as a SMILES string |
-| `target_transformed` | The value to predict (normalized activity) |
-| `compound_chembl_id` | Compound id |
-| `split` | `train` / `val` / `test`, assigned **per assay** (an assay's molecules are never split across sets — no leakage) |
-| `group` | Grouping key used to build the split |
+The datasets themselves (the four benchmark pools and the training corpora, with their sizes,
+sources and preprocessing) are described in Chapter 3 of the thesis.
 
 ---
 
 ## Project layout
 
 ```
-data/                 datasets (not in the repository)
+data/                 datasets and weights (not in the repository)
 src/                  pipeline modules: encoder, TabPFN regressor, baselines, acquisition, training
 src/scripts/          runnable scripts — open in your IDE and press Run
 cluster/              HTCondor job files for the GPU runs
@@ -96,4 +96,3 @@ experiments/          results written by the scripts (not in the repository)
 | Appendix C (detailed benchmark results) | `calibration_study.py`, `gp_mordred_geometry.py`, `appendix_c_tables.py` |
 | Chapter 5 figures and Appendix D | `plot_training.py`, `cka_study.py`, `cka_debiased.py`, `cka_epoch_level.py`, `feature_stats.py`, `feature_stats_standardised.py`, `appendix_d_tables.py` |
 | Overlap between training corpora and pools (Chapter 3) | `leakage_by_target.py` |
-

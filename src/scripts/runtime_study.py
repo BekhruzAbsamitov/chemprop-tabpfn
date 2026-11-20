@@ -1,8 +1,6 @@
-"""scripts/runtime_study.py — wall-clock cost of one acquisition round per surrogate (E7).
+"""scripts/runtime_study.py — wall-clock cost of one acquisition round per surrogate.
 
-The 2026-09-29 supervision asked for runtime performance of TabPFN vs GP and RF:
-"TabPFN can fit data fast (retraining step), but acquisition with TabPFN may be slower
-than with GP/RF?" One active learning round = fit (or condition) on the labelled set +
+One active learning round = fit (or condition) on the labelled set +
 predict mean and uncertainty for the candidates; this script times exactly that call,
 predict_dist, which is what the benchmark loop runs every round.
 
@@ -12,14 +10,10 @@ TabPFN runs on the GPU; the random forest and the Gaussian processes on the CPU,
 the benchmark. Each setting is repeated REPEATS times after one warm-up call, and the
 median is reported, so one-off costs (loading weights, CUDA initialisation) are excluded.
 
-Output: OUTPUT_CSV (refuses to overwrite). Two runs of the same sweep exist:
-  experiments/runtime_study.csv       2026-10-07, host tig, NVIDIA H200 NVL. A GPU that none of the campaigns of
-                                      the final run used: they ran on an A100-PCIe-40GB (50 of 64 jobs), an
-                                      A100-SXM4-80GB (7) or an L40S (7), and their rounds took a median 1.8 times
-                                      as long as this run predicts. This file records no hardware.
-  experiments/runtime_study_a100.csv  the repeat on an A100-PCIe-40GB (EXPECT_GPU), with the host, GPU and CPU of
-                                      each row in the last four columns. Refuses to start on any other GPU.
-Cluster: condor_submit cluster/run_gpu_runtime_a100.sub   (about 25 minutes)
+Output: OUTPUT_CSV (refuses to overwrite). The thesis uses experiments/runtime_study_a100.csv, the sweep on an
+A100-PCIe-40GB (EXPECT_GPU), the GPU of most benchmark campaigns, with the host, GPU and CPU of each row in
+the last four columns. The script refuses to start on any other GPU.
+Cluster: condor_submit cluster/run_gpu_runtime_a100.sub   (about half an hour to an hour)
 """
 
 from __future__ import annotations
@@ -50,16 +44,16 @@ from models.tabpfn_regressor import _load_hf_token  # noqa: E402
 # --------------------------------------------------------------------------- #
 # SETTINGS — edit these, then press Run.                                       #
 # --------------------------------------------------------------------------- #
-DATASET = "saureus"                       # the largest pool (31,085 molecules)
+DATASET = "saureus"  # the largest pool (31,085 molecules)
 REPRESENTATIONS = {"chemeleon": ("chemeleon", None), "morgan": ("morgan", None),
-                   "chemprop_untrained": ("untrained", None)}   # random-init D-MPNN, 300-d
+                   "chemprop_untrained": ("untrained", None)}  # random-init D-MPNN, 300-d
 MODELS = ["tabpfn", "rf", "gp", "gp_tanimoto"]
-CONTEXT_SIZES = [10, 100, 300, 1100]      # 1,100 = the largest budget in the benchmark
-CANDIDATE_SIZES = [1000, 0]               # 0 = every molecule not in the context
+CONTEXT_SIZES = [10, 100, 300, 1100]  # 1,100 = the largest budget in the benchmark
+CANDIDATE_SIZES = [1000, 0]  # 0 = every molecule not in the context
 REPEATS = 3
 N_ESTIMATORS = 4
-OUTPUT_CSV = "experiments/runtime_study_a100.csv"   # the first run, on an H200, is experiments/runtime_study.csv
-EXPECT_GPU = "A100-PCIE-40GB"             # refuse to start on any other GPU, before anything is written ("" = accept any)
+OUTPUT_CSV = "experiments/runtime_study_a100.csv"  # the first run, on an H200, is experiments/runtime_study.csv
+EXPECT_GPU = "A100-PCIE-40GB"  # refuse to start on any other GPU, before anything is written ("" = accept any)
 COLUMNS = ["dataset", "representation", "dim", "model", "device", "context_size",
            "candidates", "median_seconds", "min_seconds", "max_seconds", "status",
            "host", "gpu", "cpu", "cpus_allowed"]
@@ -72,10 +66,10 @@ def hardware() -> dict[str, str]:
         with open("/proc/cpuinfo") as f:
             cpu = next(line.split(":", 1)[1].strip() for line in f if line.startswith("model name"))
     except (OSError, StopIteration):
-        pass                                  # not Linux: keep the platform name
+        pass  # not Linux: keep the platform name
     try:
         allowed = len(os.sched_getaffinity(0))
-    except AttributeError:                    # macOS has no affinity call
+    except AttributeError:  # macOS has no affinity call
         allowed = os.cpu_count() or 0
     return dict(host=socket.gethostname(),
                 gpu=torch.cuda.get_device_name(0) if torch.cuda.is_available() else "none",
@@ -120,7 +114,7 @@ def main() -> None:
                     cand = perm[n_ctx:n_ctx + n_cand] if n_cand else perm[n_ctx:]
                     times, status = [], "ok"
                     try:
-                        model.predict_dist(X[ctx], y[ctx], X[cand])          # warm-up
+                        model.predict_dist(X[ctx], y[ctx], X[cand])  # warm-up
                         for _ in range(REPEATS):
                             if device.type == "cuda":
                                 torch.cuda.synchronize()
@@ -129,7 +123,7 @@ def main() -> None:
                             if device.type == "cuda":
                                 torch.cuda.synchronize()
                             times.append(time.perf_counter() - t0)
-                    except (RuntimeError, MemoryError) as exc:   # e.g. CUDA out of memory
+                    except (RuntimeError, MemoryError) as exc:  # e.g. CUDA out of memory
                         status = f"failed: {type(exc).__name__}"
                         if device.type == "cuda":
                             torch.cuda.empty_cache()

@@ -1,22 +1,13 @@
-# HTCondor submit file — SEED-1 REPLICATE of the epoch-mode run (2026-10-05).
-#
-# Same as run_gpu_full_sp_50ep.sub except preset full_sp_50ep_seed1: seed 1, deadline
-# 2026-10-26, own output files. If HTCondor requeues the job (e.g. after maintenance),
-# the restart now refuses to overwrite the existing curve/checkpoints and exits.
-#
-#   one validation epoch = the WHOLE validation set (3,496 episodes, uncapped)
-#   validation loss      = mean over all validation data points
-#   lr 3e-5, up to 50 epochs, early stopping with patience 5 on validation loss
-#   stops cleanly before 2026-10-26 00:00 UTC if early stopping has not fired
-#
-# ~13.4 h per epoch (12.4 h training + ~1 h full validation), so the deadline allows
-# roughly 30 epochs. There is NO resume: if the job is killed, the curve CSV and one
-# checkpoint per epoch survive up to that point, but training cannot continue.
-#
-# Watch: experiments/val_curve_full_sp_50ep_seed1.csv (one row per epoch)
-# Plot:  uv run --with matplotlib python src/scripts/plot_epoch_curves.py
-# Submit from the repo root:  condor_submit cluster/run_gpu_full_sp_50ep_seed1.sub
-
+# Encoder training on the single-protein ChEMBL set in epoch mode (run_experiment.py, preset "full_sp_50ep_seed1"):
+# learning rate 3e-5, up to 50 epochs, early stopping with patience 5 on the validation loss of the
+# whole validation set. About 13.4 h per epoch.
+# No resume: if the job is killed, the curve CSV and one checkpoint per epoch remain, but training
+# cannot continue.
+# Seed-1 replicate of run_gpu_full_sp_50ep.sub, with its own output files. A requeued job refuses to
+# overwrite the existing curve and checkpoints and exits.
+# Validation curve: experiments/val_curve_full_sp_50ep_seed1.csv (one row per epoch)
+# Submit from the repository root, after `mkdir -p runlogs`:
+#   condor_submit cluster/run_gpu_full_sp_50ep_seed1.sub
 universe                = docker
 docker_image            = pytorch/pytorch:2.3.1-cuda12.1-cudnn8-devel
 executable              = cluster/run_gpu_full_sp_50ep_seed1.sh

@@ -1,11 +1,10 @@
 """scripts/runtime_capacity.py — how many candidates fit in ONE TabPFN predict call on a 40 GB A100? Press Run.
 
-The 2026-11-12 supervision asked about the runtime study: "1000 molecules for timing — does predicting on that
-sample exhaust what is possible with a 40GB A100 GPU? try if more fits in one model.predict step?"
+
 
 The benchmark scores 1,000 candidates per round because the protocol subsamples them, not because of the GPU, and
 runtime_study.py already scored the whole S. aureus pool (about 31,000 candidates) in one call. It recorded no GPU
-memory, however, and went no further. This script answers the question directly. For each representation and
+memory, however. For each representation and
 labelled-set size it fits TabPFN once and then makes ONE predict call for a growing number of candidates, and
 records for every size
 
@@ -24,10 +23,7 @@ such calls (mean, then quantiles), so a round costs about twice the time and no 
 The sizes run in ascending order across all settings, and a row with status `started` is written BEFORE every
 attempt. If the job is killed from outside (the host-RAM limit of the job, which Python cannot catch), the file
 therefore ends with a `started` row that names the setting it died in, and every smaller size is already saved.
-After a failure, the larger sizes of that representation and labelled-set size are skipped. (The run of 2026-11-13,
-job 237508, still caught only RuntimeError and MemoryError: TabPFN's own out-of-memory error ended it at the first
-failure, 400,000 candidates of chemprop_untrained with 100 labelled molecules, so its CSV ends with that
-`started` row and the error is in the job's output file.) A setting whose input
+After a failure, the larger sizes of that representation and labelled-set size are skipped. A setting whose input
 matrix alone exceeds MAX_INPUT_GB of host RAM is skipped and marked, so that host RAM, which the job requests
 conservatively (cluster/run_gpu_capacity_a100.sub), does not decide a question about the GPU.
 

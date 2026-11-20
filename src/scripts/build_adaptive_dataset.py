@@ -1,10 +1,9 @@
 """scripts/build_adaptive_dataset.py — build a target-specific ChEMBL training set.
 
-Implements the 2026-07-23 supervision "adaptive training dataset" recipe: take one
-inference target (its active-learning compounds) + a protein class, and carve a
+Takes one inference target (its active-learning compounds) + a protein class, and carves a
 domain-matched, leakage-free training set out of full ChEMBL.
 
-Steps (exactly the notes):
+Steps:
   1. Per-target assay selection: protein class (gpcr/protease) + confidence 9 +
      standard_type in {IC50, Ki, Kd} + target_transformed_type == pchembl_value.
   2. Structure-similarity adaptation (assay-level drop): drop an assay if its max
@@ -15,8 +14,7 @@ Steps (exactly the notes):
 
 Output: a parquet in the loader's schema (assay_x_type_x_doc, canonical_smiles,
 target_transformed, split) — a drop-in CHEMBL_FULL_FILE for meta-training this
-target. Run once per target (D2R gpcr, USP7 protease; S. aureus once its criterion
-is known). Settings are constants below. No flags / env vars — open and press Run.
+target. Run once per target. Settings are constants below. No flags / env vars — open and press Run.
 """
 
 from __future__ import annotations
@@ -66,8 +64,7 @@ TARGET_RANGE = None
 
 # --- structure-similarity adaptation (Tanimoto + MW window) ---
 # ON for foreign-pool targets (keeps only assays near the AL chemistry). OFF for a
-# same-organism pool (S. aureus), where the pool is already on-target and the
-# supervisor's recipe is "use the exact target, just handle the overlap".
+# same-organism pool (S. aureus), where the pool is already on-target.
 APPLY_STRUCTURE_ADAPTATION = True
 TANIMOTO_MIN = 0.40                             # drop assay if max sim to AL < this
 MW_MARGIN_DA = 100.0                            # median-MW window is [Q25 - m, Q75 + m]

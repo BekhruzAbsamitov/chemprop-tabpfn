@@ -1,26 +1,20 @@
 """scripts/run_experiment.py — train the Chemprop encoder on ChEMBL. Press Run.
 
-ONE configurable training script for every run we do. Instead of a separate file
-per target/scale (the old run_experiment_{gpu,d2r,d2r_long,usp7,saureus}.py), pick a
-named PRESET below and press Run. Each preset is just a bundle of the settings that
-differ; everything else inherits the `Preset` defaults (the fast local "dev" run).
+One configurable training script for every run: pick a named preset below (EXPERIMENT) and press Run.
+A preset is a bundle of the settings that differ; everything else inherits the `Preset` defaults
+(the fast local "dev" run).
 
-  dev            fast local smoke test on dev ChEMBL (the defaults)
-  full           full cleaned ChEMBL, thesis scale (§5b) — the all-of-ChEMBL firehose
-  d2r            D2R adaptive, domain-matched GPCR set, 20k steps (§5c)
-  usp7           USP7 adaptive, small protease set, eval often (§5c)
-  saureus        S. aureus adaptive, organism MIC set, 8k steps (§5c)
-  d2r_long       D2R adaptive, 100k steps (~32 passes)   } the "train it long" test
-  usp7_long      USP7 adaptive, 100k steps (~719 passes) } (§7) — rules out
-  saureus_long   S. aureus adaptive, 100k (~125 passes)  } "it needs more steps"
+  dev                                  fast local test on dev ChEMBL (the defaults)
+  full                                 all of ChEMBL
+  full_sp                              single-protein ChEMBL, 100k steps
+  full_sp_10ep, _10ep_lowlr, _10ep_cosine    single-protein ChEMBL, 10 epochs
+  full_sp_50ep, full_sp_50ep_seed1     single-protein ChEMBL, epoch mode with early stopping
+  d2r, usp7, saureus                   the target's domain-matched set
+  d2r_long, usp7_long, saureus_long    the same, 100k steps
 
-Trains the encoder differentiably (gradients flow through the frozen TabPFN) and
-tracks an HONEST in-domain learning curve: a fixed held-out set of ChEMBL/adaptive
-test episodes is scored every `eval_every` steps (val_loss + val_spearman), because
-the per-step training loss is too noisy to read (a different assay each step).
-
-Evaluation on the target datasets (S. aureus / D2R / USP7) is a SEPARATE step —
-run scripts/model_evaluation.py (or evaluate_adaptive.py) on the saved encoder.
+Trains the encoder differentiably (gradients flow through the frozen TabPFN) and tracks an in-domain
+learning curve: a fixed held-out set of test episodes is scored during training (validation loss and
+Spearman), because the per-step training loss is too noisy to read (a different assay each step).
 
 To run: set EXPERIMENT below and press Run in the IDE. (On the cluster you may pass
 a preset name as the first argument — `python run_experiment.py d2r_long` — which
@@ -69,9 +63,7 @@ class Preset:
     n_train_steps: int = 500       # how many training episodes to run
     learning_rate: float = 1e-4    # 1e-3 thrashed on dev; 1e-4 is stable
     loss_fn: str = "nll"           # "nll" (recommended) | "mse" | "huber"
-    # Max encoder grad norm per step. Measured norms are ~150, so the historical
-    # 1.0 clips EVERY step (see report §7 branch 1) — raise it to let magnitude
-    # differences between batches through.
+    # Max encoder grad norm per step. Measured norms are about 150, so 1.0 clips every step.
     grad_clip_norm: float = 1.0
     max_train_context: int = 128
     max_train_query: int = 128
@@ -87,17 +79,15 @@ class Preset:
     checkpoint_every: int = 0
     # "none" (constant lr) or "cosine" (anneal lr -> ~0 across the run).
     lr_schedule: str = "none"
-    # EPOCH MODE (2026-09-11 supervision). n_epochs > 0 switches training from a fixed
-    # step count to whole epochs, with validation on the WHOLE held-out set after each
-    # epoch and early stopping; n_train_steps / eval_every / n_val_episodes are then
-    # unused. patience = epochs without val-loss improvement before stopping.
+    # Epoch mode: n_epochs > 0 switches training from a fixed step count to whole epochs, with
+    # validation on the whole held-out set after each epoch and early stopping; n_train_steps /
+    # eval_every / n_val_episodes are then unused. patience = epochs without improvement of the
+    # validation loss before stopping.
     n_epochs: int = 0
     patience: int = 5
     deadline_utc: str = ""        # stop cleanly before this UTC time; "" = no deadline
-    # Validation episode caps in epoch mode. None = uncapped, so the validation loss
-    # really covers every held-out data point. Safe memory-wise because validation runs
-    # without gradients; the untrained epoch-0 pass exercises the largest episode first,
-    # so a problem would surface within the first hour rather than days in.
+    # Validation episode caps in epoch mode. None = uncapped, so the validation loss covers
+    # every held-out data point.
     val_max_context: int | None = None
     val_max_query: int | None = None
     seed: int = 0
@@ -105,31 +95,20 @@ class Preset:
 
 
 PRESETS: dict[str, Preset] = {
-    # Fast local smoke test on dev ChEMBL — the defaults. Press Run to use it.
+    # Fast local test on dev ChEMBL: the defaults.
     "dev": Preset(),
 
-    # Full cleaned ChEMBL, thesis scale (§5b). ~28% of 180k assays once; the fixed
-    # val curve reveals learning (or its absence) long before the last step.
+    # All of ChEMBL.
     "full": Preset(
         use_full_data=True, hidden_size=300, n_estimators=8,
         n_train_steps=50000, eval_every=2000, n_val_episodes=64,
         val_curve_csv="experiments/train_val_curve.csv",
         save_encoder_to="experiments/trained_encoder_full.pt", print_every=500),
 
-    # Single-protein curated set (2026-08-20 supervision). Stricter ChEMBL 36 cut:
-    # binding assays, single-protein targets, confidence 9, IC50/Ki/Kd, >=5 measurements.
-    # 34.2k train assays — 5x FEWER than `full`, but far cleaner and, decisively, nearly
-    # leakage-free against the AL pools (S. aureus 77%->5%, D2R 91%->1%). Retraining here
-    # is what removes the leakage caveat qualifying two targets in §5e.
-    # 100k steps is ~2.9 passes; step checkpoints kept so §8b/§9 can be redone on it.
-    # Episode caps are 64, not the usual 128. The first attempt (2026-08-22, cluster
-    # 182401) OOM'd at step ~12k on a 40GB card. The memory instrumentation showed why:
-    # live memory was a flat 465 MiB — no leak — but a single step PEAKED at 38.6 GiB of
-    # a 39.4 GiB card, i.e. 98 % of capacity, so the first episode larger than anything
-    # seen so far tipped it over. Attention is quadratic in episode length, so halving
-    # the cap cuts the peak to ~0.25x. The scientific cost is negligible: it truncates
-    # 1.9 % of episodes instead of 0.7 % (still a uniform random subset, since indices
-    # are pre-shuffled) and leaves the MEDIAN episode — 15 molecules — untouched.
+    # Single-protein ChEMBL: binding assays, single-protein targets, confidence 9, IC50/Ki/Kd,
+    # >= 5 measurements. 100k steps are about 2.9 passes. Episode caps are 64, not the usual 128:
+    # at 128 a single step peaked at 38.6 GiB of a 39.4 GiB card and the run went out of memory.
+    # This truncates 1.9 % of episodes instead of 0.7 %.
     "full_sp": Preset(
         train_data_file="data/curated/chembl36_single_protein_clean.parquet",
         hidden_size=300, n_estimators=8, n_train_steps=100000,
@@ -139,23 +118,10 @@ PRESETS: dict[str, Preset] = {
         save_encoder_to="experiments/trained_encoder_full_sp.pt", print_every=500,
         checkpoint_every=2000),
 
-    # 10 EPOCHS on the curated single-protein set (2026-08-27 supervision: "train for
-    # at least 10 epochs, monitor validation loss and spearman on epoch-level, plot the
-    # first 10 epochs, is there a trend to convergence?").
-    #
-    # 1 epoch = 31,384 usable episodes (34,192 assays, 2,808 of which cannot form an
-    # episode), and one step consumes one episode -> 10 epochs = 313,840 steps. At the
-    # measured 1,423 s / 1,000 steps that is ~124 h, about 5.2 days.
-    #
-    # eval_every = 3,923 = 1/8 epoch. Finer than "epoch-level" so the curve plots
-    # smoothly (80 points), while every 8th evaluation lands EXACTLY on an epoch
-    # boundary because 8 x 3,923 = 31,384. NOTE this only works because the eval check
-    # is now independent of print_every: an epoch is 2^3 x 3,923 with 3,923 prime, so
-    # under the old nested check (step % print_every == 0 AND step % eval_every == 0)
-    # an epoch-aligned eval_every would have produced NO evaluations at all.
-    #
-    # NO resume: a crash loses the ability to continue, but not the results — the curve
-    # CSV is written incrementally and step-tagged encoders land every 3,923 steps.
+    # 10 epochs on the single-protein set. 1 epoch = 31,384 usable episodes and one step consumes
+    # one episode, so 10 epochs = 313,840 steps (about 5.2 days). eval_every = 3,923 = 1/8 epoch,
+    # so every 8th evaluation lands on an epoch boundary. No resume: after a crash the curve CSV
+    # and the step-tagged encoders remain, but training cannot continue.
     "full_sp_10ep": Preset(
         train_data_file="data/curated/chembl36_single_protein_clean.parquet",
         hidden_size=300, n_estimators=8, n_train_steps=313840,
@@ -165,17 +131,10 @@ PRESETS: dict[str, Preset] = {
         save_encoder_to="experiments/trained_encoder_full_sp_10ep.pt", print_every=500,
         checkpoint_every=3923),
 
-    # ---- 2026-09-03 supervision: the validation curve fluctuates undiminished to the
-    # last step, and a lower learning rate was suggested. WHY it cannot settle on its
-    # own: gradients (33-75) exceed grad_clip_norm=1.0 on 100 % of steps, so every
-    # update is rescaled to exactly lr x 1.0 and the magnitude never shrinks; there was
-    # also no schedule. Both mechanisms that normally quiet a run are therefore absent.
-    #
-    # Two variants, because "lower learning rate" and "decay the learning rate" are
-    # different fixes and the observation does not distinguish them. Everything else is
-    # identical to full_sp_10ep, so all three runs are directly comparable.
+    # Two variants of full_sp_10ep, everything else identical: a lower learning rate, and a
+    # cosine decay of the learning rate.
 
-    # (a) The literal suggestion: same schedule (none), lr lowered 3.3x.
+    # (a) Same schedule (none), learning rate lowered 3.3x.
     "full_sp_10ep_lowlr": Preset(
         train_data_file="data/curated/chembl36_single_protein_clean.parquet",
         hidden_size=300, n_estimators=8, n_train_steps=313840,
@@ -185,9 +144,7 @@ PRESETS: dict[str, Preset] = {
         save_encoder_to="experiments/trained_encoder_full_sp_10ep_lowlr.pt",
         print_every=500, checkpoint_every=3923),
 
-    # (b) Cosine decay from the rate that demonstrably learned (1e-4) to ~0. Keeps the
-    # early phase — where the previous run showed its only real progress, val_loss
-    # -0.0335/epoch at t=-7.00 — and quiets only the plateau.
+    # (b) Cosine decay from 1e-4 to about 0.
     "full_sp_10ep_cosine": Preset(
         train_data_file="data/curated/chembl36_single_protein_clean.parquet",
         hidden_size=300, n_estimators=8, n_train_steps=313840,
@@ -198,15 +155,9 @@ PRESETS: dict[str, Preset] = {
         save_encoder_to="experiments/trained_encoder_full_sp_10ep_cosine.pt",
         print_every=500, checkpoint_every=3923),
 
-    # ---- 2026-09-11 supervision: the training protocol, done properly ----------
-    #   one validation epoch = evaluate on ALL validation data
-    #   validation loss      = loss over all validation data points
-    #   train longer than 10 epochs with a smaller learning rate
-    #   50 epochs, stop if validation loss does not improve for 5 epochs in a row
-    # 3e-5 is the smaller rate already tested: at 10 epochs its validation loss was still
-    # falling (slope -0.0071/epoch, t=-2.92), so it had room to go. Each epoch is ~12.4 h
-    # of training plus ~1 h of full validation, so the 1 October deadline caps the run at
-    # roughly 30 epochs if early stopping has not fired by then.
+    # Epoch mode: validation on all validation data after every epoch, up to 50 epochs at learning
+    # rate 3e-5, stop if the validation loss does not improve for 5 epochs in a row. About 12.4 h
+    # of training plus 1 h of validation per epoch.
     "full_sp_50ep": Preset(
         train_data_file="data/curated/chembl36_single_protein_clean.parquet",
         hidden_size=300, n_estimators=8,
@@ -217,13 +168,10 @@ PRESETS: dict[str, Preset] = {
         save_encoder_to="experiments/trained_encoder_full_sp_50ep.pt",
         print_every=2000),
 
-    # Independent REPLICATE of full_sp_50ep (2026-10-05): identical except seed=1, which
-    # changes the encoder's initialisation, the training order and the training episodes'
-    # support/query splits. The VALIDATION set is unchanged: build_val_episodes seeds each
-    # assay's split by its assay id, and with all held-out assays used the run seed only
-    # reorders them — so the two curves are measured on the same 3,497 episodes and can be
-    # compared directly. Own output names, so it can never touch the seed-0 run's files
-    # (and train_encoder_epochs now refuses to overwrite in any case).
+    # Replicate of full_sp_50ep with seed=1, which changes the encoder's initialisation, the
+    # training order and the training episodes' support/query splits. The validation set is
+    # unchanged, so the two curves can be compared directly. Own output names, so it cannot
+    # touch the files of the seed-0 run.
     "full_sp_50ep_seed1": Preset(
         train_data_file="data/curated/chembl36_single_protein_clean.parquet",
         hidden_size=300, n_estimators=8,
@@ -234,7 +182,7 @@ PRESETS: dict[str, Preset] = {
         save_encoder_to="experiments/trained_encoder_full_sp_50ep_seed1.pt",
         print_every=2000),
 
-    # D2R adaptive (§5c) — domain-matched GPCR set (~3.1k train assays); 20k ~6 passes.
+    # D2R: domain-matched GPCR set (about 3.1k train assays); 20k steps are about 6 passes.
     "d2r": Preset(
         train_data_file="data/curated/train_adaptive_D2R.parquet",
         hidden_size=300, n_estimators=8, n_train_steps=20000,
@@ -242,8 +190,7 @@ PRESETS: dict[str, Preset] = {
         val_curve_csv="experiments/train_val_curve_d2r.csv",
         save_encoder_to="experiments/trained_encoder_d2r.pt", print_every=200),
 
-    # D2R long (§7) — same set, 100k steps (~32 passes): the "does it just need more
-    # training?" test. If val stays flat across 32 epochs, "too few steps" is ruled out.
+    # D2R, same set, 100k steps (about 32 passes).
     "d2r_long": Preset(
         train_data_file="data/curated/train_adaptive_D2R.parquet",
         hidden_size=300, n_estimators=8, n_train_steps=100000,
@@ -252,8 +199,7 @@ PRESETS: dict[str, Preset] = {
         save_encoder_to="experiments/trained_encoder_d2r_long.pt", print_every=500,
         checkpoint_every=2000),  # 50 step-tagged encoders for the CKA trajectory
 
-    # USP7 adaptive (§5c) — SMALL protease set (~139 train assays). Overfitting the
-    # meta-train distribution is a real risk, so eval often and read the val PEAK.
+    # USP7: small protease set (about 139 train assays), so evaluate often.
     "usp7": Preset(
         train_data_file="data/curated/train_adaptive_USP7.parquet",
         hidden_size=300, n_estimators=8, n_train_steps=5000,
@@ -261,11 +207,8 @@ PRESETS: dict[str, Preset] = {
         val_curve_csv="experiments/train_val_curve_usp7.csv",
         save_encoder_to="experiments/trained_encoder_usp7.pt", print_every=250),
 
-    # USP7 long (§7) — 100k steps over only ~139 train assays is ~719 passes, far
-    # into memorization territory: if the encoder CAN fit this meta-train set, train
-    # loss must fall here (and val will show the overfit gap). A flat train loss even
-    # at 719 passes is the strongest possible "no signal" evidence. Only 16 val
-    # episodes exist, so single-point val_spearman swings +-0.1 — read the trend.
+    # USP7, same set, 100k steps (about 719 passes). Only 16 validation episodes exist, so a
+    # single evaluation of the validation Spearman swings by about 0.1.
     "usp7_long": Preset(
         train_data_file="data/curated/train_adaptive_USP7.parquet",
         hidden_size=300, n_estimators=8, n_train_steps=100000,
@@ -274,7 +217,7 @@ PRESETS: dict[str, Preset] = {
         save_encoder_to="experiments/trained_encoder_usp7_long.pt", print_every=500,
         checkpoint_every=2000),  # 50 step-tagged encoders for the CKA trajectory
 
-    # S. aureus adaptive (§5c) — organism MIC set (~802 train assays); 8k ~10 passes.
+    # S. aureus: organism MIC set (about 802 train assays); 8k steps are about 10 passes.
     "saureus": Preset(
         train_data_file="data/curated/train_adaptive_S_aureus.parquet",
         hidden_size=300, n_estimators=8, n_train_steps=8000,
@@ -282,9 +225,7 @@ PRESETS: dict[str, Preset] = {
         val_curve_csv="experiments/train_val_curve_saureus.csv",
         save_encoder_to="experiments/trained_encoder_saureus.pt", print_every=250),
 
-    # S. aureus long (§7) — same organism set, 100k steps (~125 passes). The 8k run
-    # ended BELOW its step-0 baseline (0.203 vs 0.248); this checks whether that is
-    # drift/noise or a real downward trend given 12x the training.
+    # S. aureus, same set, 100k steps (about 125 passes).
     "saureus_long": Preset(
         train_data_file="data/curated/train_adaptive_S_aureus.parquet",
         hidden_size=300, n_estimators=8, n_train_steps=100000,

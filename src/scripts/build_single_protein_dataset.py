@@ -1,8 +1,8 @@
-"""scripts/build_single_protein_dataset.py — the 2026-08-20 curated set. Press Run.
+"""scripts/build_single_protein_dataset.py — the single-protein training set. Press Run.
 
-Converts the supervisor's `chembl36_curated_single_protein.csv` into the 4-column
+Converts `chembl36_curated_single_protein.csv` into the 4-column
 parquet `data_utils/data.py` loads. That file is a much stricter cut of ChEMBL 36 than
-the one every previous run used — binding assays only, single-protein targets only,
+full ChEMBL — binding assays only, single-protein targets only,
 confidence 9 only, IC50/Ki/Kd only, >= 5 measurements per assay, all SMILES RDKit-parseable.
 
 WHY IT MATTERS: 39.5k assays against ~180k before, so this is *less* data but far cleaner
@@ -17,9 +17,7 @@ training split with each pool, full ChEMBL -> this corpus, as a fraction of the 
     D2R          91.1 %  ->  91.4 %        3.8 %  ->  4.4 %
 
 Only the right-hand column can leak benchmark labels, so this corpus removes the one real
-leakage of the full-ChEMBL encoder (S. aureus). The overlap once quoted here (D2R 1.2 %,
-USP7 and TYK2 0 %) was a raw-string match, which misses molecules the Gorantla pools
-write in non-canonical form.
+leakage of the full-ChEMBL encoder (S. aureus).
 
 TWO DECISIONS THIS SCRIPT MAKES, both deliberate:
 

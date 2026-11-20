@@ -71,7 +71,7 @@ ALL_REPRESENTATIONS_TEX = [
 COVERAGE_LEVELS = [10, 20, 30, 40, 50, 60, 70, 80, 90, 95]
 ROUND_BINS = [(1, 5), (6, 10), (11, 15), (16, 20)]
 
-# Printed by gp_mordred_geometry.py on 2026-10-19 (D2R pool, 100 labelled molecules, RBF GP):
+# Printed by gp_mordred_geometry.py (D2R pool, 100 labelled molecules, RBF GP):
 # width, effective rank, median distance, CV of distances, p99/p1 of distances, fitted length scale,
 # fitted signal variance, mean off-diagonal kernel value, SD of predicted mean / SD of activity.
 MORDRED_DIAGNOSIS = [

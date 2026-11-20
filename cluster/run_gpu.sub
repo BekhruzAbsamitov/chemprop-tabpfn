@@ -1,7 +1,6 @@
-# HTCondor submit file — full-scale RQ4 run on one GPU (docker universe).
-# Submit from the repo root:  condor_submit cluster/run_gpu.sub
-# Prereq: run the one-time setup first (see cluster/README.md).
-
+# Encoder training on all of ChEMBL (run_experiment.py, preset "full").
+# Submit from the repository root, after `mkdir -p runlogs`:
+#   condor_submit cluster/run_gpu.sub
 universe                = docker
 docker_image            = pytorch/pytorch:2.3.1-cuda12.1-cudnn8-devel
 executable              = cluster/run_gpu.sh

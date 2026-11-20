@@ -1,6 +1,6 @@
-# HTCondor submit file — direct calibration study (E1): coverage-based ECE, NLL, Spearman
-# for TabPFN (full and Gaussian intervals), RF, GP and the Tanimoto GP on 5 datasets.
-# Output: experiments/calibration_study.csv.   Submit: condor_submit cluster/run_gpu_calibration.sub
+# Calibration study (calibration_study.py). Output: experiments/calibration_study.csv
+# Submit from the repository root, after `mkdir -p runlogs`:
+#   condor_submit cluster/run_gpu_calibration.sub
 universe                = docker
 docker_image            = pytorch/pytorch:2.3.1-cuda12.1-cudnn8-devel
 executable              = cluster/run_gpu_calibration.sh
@@ -20,8 +20,7 @@ requirements            = UidDomain == "cs.uni-saarland.de"
 +WantGPUHomeMounted     = true
 +WantScratchMounted     = true
 
-# Short job (< 2 h): accept being reclaimed with up to 8 h notice. That makes the shared GPU
-# machines (tig, tyr1/2, fjolnir, fornjoter) eligible; they reject jobs that leave this unset.
+# Short job: accepting to be reclaimed with up to 8 h notice makes the shared GPU machines eligible.
 +MaxJobRetirementTime   = 28800
 
 queue 1

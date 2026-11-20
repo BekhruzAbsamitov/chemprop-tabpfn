@@ -1,22 +1,10 @@
-# HTCondor submit file — retrain on the 2026-08-20 single-protein curated set (GPU).
-# The supervisor's stricter ChEMBL 36 cut: binding assays, single-protein targets,
-# confidence 9, IC50/Ki/Kd, >=5 measurements. 34,192 train assays (5x fewer than the
-# old `full` run) but far cleaner and, decisively, nearly leakage-free against the AL
-# pools: S. aureus 77.2%->5.2%, D2R 91.1%->1.2%, USP7 4.4%->0.0%, TYK2 0.2%->0.0%.
-#
-# WHY THIS RUN MATTERS: it removes the leakage caveat that currently qualifies two of
-# the four targets in report §5e. The resulting encoder replaces trained_encoder_full.pt
-# as the `chemprop_trained_full` benchmark arm, so run this BEFORE the next AL benchmark
-# rather than benchmarking twice.
-#
-# Watch experiments/train_val_curve_full_sp.csv. 100k steps ~= 2.9 passes over the set.
-# Submit from the repo root:  condor_submit cluster/run_gpu_full_sp.sub
-# Prereq: one-time setup (cluster/README.md) + chembl36_single_protein_clean.parquet
-# synced to the cluster. ~1.5-2 days wall-clock — checkpointed at every eval.
-#
-# request_memory is HOST RAM, not VRAM. Measured usage is ~1.4GB; an oversized ask
-# leaves the job IDLE beside free A100s. VRAM is requested via GPUs_GlobalMemoryMb.
-
+# Encoder training on the single-protein ChEMBL set for 100,000 steps (run_experiment.py, preset "full_sp").
+# Needs data/curated/chembl36_single_protein_clean.parquet on the cluster.
+# Validation curve: experiments/train_val_curve_full_sp.csv
+# About 1.5 to 2 days; a checkpoint is saved at every evaluation.
+# request_memory is host RAM, not GPU memory: an oversized request leaves the job idle beside free GPUs.
+# Submit from the repository root, after `mkdir -p runlogs`:
+#   condor_submit cluster/run_gpu_full_sp.sub
 universe                = docker
 docker_image            = pytorch/pytorch:2.3.1-cuda12.1-cudnn8-devel
 executable              = cluster/run_gpu_full_sp.sh

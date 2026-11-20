@@ -1,10 +1,8 @@
 """scripts/feature_stats.py — WHY is the trained encoder worse than random init? Press Run.
 
-The 2026-08-13 supervision asked the question the AL benchmark forced on us: training
-the encoder does not merely fail to help, it makes the representation *worse* than the
-random initialisation it started from (report §5e Result 3 — untrained Chemprop beats
-every trained variant on 23 of 24 S. aureus cells). "It didn't learn" explains a tie.
-It does not explain a loss.
+Encoders trained at the higher learning rate do not merely fail to help: their
+representation is *worse* than the random initialisation they started from. "It didn't
+learn" explains a tie. It does not explain a loss.
 
 THE HYPOTHESIS. TabPFN is a prior-fitted network: it was meta-trained on synthetic
 tabular datasets and does in-context inference against that prior. It never updates its
@@ -75,13 +73,7 @@ from models.morgan import morgan_features  # noqa: E402
 # whose `test` split supplies the molecules. Same sources as the CKA trajectory, so
 # the two studies are directly comparable. A missing directory is skipped with a note.
 TRAJECTORIES = {
-    # The 2026-08-24 clean single-protein run — the FIRST run whose val_spearman rises
-    # significantly above its own baseline (§5h). §9 predicts feature collapse causes the
-    # damage in the failing runs, so this one is the direct test of the mechanism: if the
-    # encoder genuinely improved, its effective rank should NOT have collapsed.
-    # 10 epochs on the same set (§5h). §9 says training collapses effective rank; the
-    # 3.19-epoch run showed it collapsing then partially RECOVERING, so this asks whether
-    # longer training recovers further — which would qualify §9 — or settles low.
+    # The single-protein runs: 100k steps, and 10 epochs on the same set.
     "full_sp_10ep": ("experiments/trained_encoder_full_sp_10ep_steps",
                      "data/curated/chembl36_single_protein_clean.parquet"),
     "full_sp": ("experiments/trained_encoder_full_sp_steps",
@@ -92,12 +84,9 @@ TRAJECTORIES = {
                  "data/curated/train_adaptive_D2R.parquet"),
     "usp7_long": ("experiments/trained_encoder_usp7_long_steps",
                   "data/curated/train_adaptive_USP7.parquet"),
-    # The epoch-level run at lr 3e-5 (§5h): the first run with a STEADY in-domain gain.
-    # §9's collapse was measured on runs at 1e-4; this asks whether it also happens at the
-    # lower rate. Same molecules as full_sp_10ep (same parquet), so the two are directly
-    # comparable. epoch_001 of the original run was lost to the 2026-10-01 restart (only the
-    # restart's copy survives, renamed, and the 3-digit pattern below skips it); epoch_000
-    # was rewritten by the restart but is bit-identical to the seeded initialisation.
+    # The epoch-level run at learning rate 3e-5. Same molecules as full_sp_10ep (same parquet), so
+    # the two are directly comparable. Only epoch_NNN.pt files are read; a renamed copy from a
+    # job restart is skipped.
     "full_sp_50ep": ("experiments/trained_encoder_full_sp_50ep_epochs",
                      "data/curated/chembl36_single_protein_clean.parquet"),
     "full_sp_50ep_seed1": ("experiments/trained_encoder_full_sp_50ep_seed1_epochs",

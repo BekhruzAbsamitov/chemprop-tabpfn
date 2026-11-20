@@ -1,31 +1,14 @@
-# HTCondor submit file — the runtime sweep (E7) repeated on an A100-PCIe-40GB (2026-11-09).
+# Runtime sweep on an A100-PCIe-40GB, the GPU of most benchmark campaigns (runtime_study.py).
+# Output: experiments/runtime_study_a100.csv. The script refuses to start on any other GPU and refuses to
+# overwrite its output, so a job that lands on the wrong GPU writes nothing and can be resubmitted.
+# About half an hour to an hour.
 #
-# Why. The first sweep (experiments/runtime_study.csv, 2026-10-07) ran on an NVIDIA H200 NVL (host tig): the line
-# "+MaxJobRetirementTime" of cluster/run_gpu_runtime.sub makes the H200 machines eligible for a short job. None of the
-# 64 campaigns of the final benchmark ran on an H200 (50 ran on an A100-PCIe-40GB, 7 on an A100-SXM4-80GB, 7 on an
-# L40S), and their rounds took a median 1.8 times as long as that sweep predicts. This job repeats the IDENTICAL sweep
-# (same pool, representations, surrogates, labelled-set sizes, candidates, repeats and ensemble size) on the
-# A100-PCIe-40GB of most campaigns, so that the runtime figures of the thesis (Section 4.2.4, Appendix B) match the
-# hardware of the benchmark.
-#
-# Output: experiments/runtime_study_a100.csv, with four new columns (host, gpu, cpu, cpus_allowed) that record
-# the hardware of every row. The script refuses to start on any other GPU, and refuses to overwrite its output, so a job
-# that lands on the wrong GPU writes nothing and can simply be resubmitted. Expected run time: about half an hour to an
-# hour (the sweep took 25 minutes on the H200; an A100 is slower).
-#
-# Before submitting, on the cluster:
-#   1. the updated src/scripts/runtime_study.py must be there (cluster/sync.sh push; the change is not committed);
-#   2. experiments/runtime_study_a100.csv must not exist;
-#   3. mkdir -p runlogs
-#
-#   condor_submit -dry-run /dev/null cluster/run_gpu_runtime_a100.sub    # validate only
-#   condor_submit cluster/run_gpu_runtime_a100.sub
-#
-# If the dry run rejects the DeviceName expression, use this one instead (the 40 GB A100s: an L40S has capability 8.9,
-# an H200 9.0, and the A100-SXM4-80GB has more memory):
+# If the dry run rejects the DeviceName expression, use this one instead (the 40 GB A100s):
 #   require_gpus = (Capability == 8.0 && GlobalMemoryMb < 50000)
 #
-# Afterwards, copy experiments/runtime_study_a100.csv and the three runlogs/run_gpu_runtime_a100.* files back.
+# Submit from the repository root, after `mkdir -p runlogs`:
+#   condor_submit -dry-run /dev/null cluster/run_gpu_runtime_a100.sub   # validate only
+#   condor_submit cluster/run_gpu_runtime_a100.sub
 universe                = docker
 docker_image            = pytorch/pytorch:2.3.1-cuda12.1-cudnn8-devel
 executable              = cluster/run_gpu_runtime.sh
@@ -39,15 +22,14 @@ getenv                  = HOME
 
 request_GPUs            = 1
 request_CPUs            = 4
-# 4 GB (the value of the first sweep) was exceeded on freya: held 2026-11-09 18:04, "Docker job has gone over memory
-# limit of 4096 Mb". 7 GB is what the benchmark jobs asked for on the same A100 hosts.
+# Host RAM. 4 GB was exceeded; 7 GB is what the benchmark jobs ask for on the same A100 hosts.
 request_memory          = 7GB
 require_gpus            = (DeviceName == "NVIDIA A100-PCIE-40GB")
 requirements            = UidDomain == "cs.uni-saarland.de"
 +WantGPUHomeMounted     = true
 +WantScratchMounted     = true
 
-# As in the first sweep. It only widens the machines that accept the job; the GPU model is fixed by require_gpus.
+# Only widens the machines that accept the job; the GPU model is fixed by require_gpus.
 +MaxJobRetirementTime   = 28800
 
 queue 1

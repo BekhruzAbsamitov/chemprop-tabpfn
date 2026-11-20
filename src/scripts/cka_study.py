@@ -1,9 +1,6 @@
 """scripts/cka_study.py — did training actually CHANGE the encoder? Press Run.
 
-The 2026-07-30 supervision asked: look at the embeddings and see if they are moving.
-Branch 1 established that the encoder receives a large, correctly-scaled gradient
-signal (report §7) — this script asks the complementary question: does the
-representation itself change, and by how much?
+Does the representation itself change during training, and by how much?
 
 For each held-out assay we embed the SAME molecules with two encoders and score them
 with CKA (centered kernel alignment): 1.0 = the same representation up to rotation
@@ -13,7 +10,7 @@ and scaling, ~0 = unrelated.
     E_trained = chemprop_trained(X)     # the encoder after training
     CKA(E_initial, E_trained)           # how far did training move it?
 
-A CKA score means nothing on its own, so — as the supervision stressed — every score
+A CKA score means nothing on its own, so every score
 is reported next to three REFERENCES, all measured against the same E_initial:
 
     other-init   a second random encoder (different seed)  -> how far does merely
@@ -24,7 +21,7 @@ is reported next to three REFERENCES, all measured against the same E_initial:
 Read it as: if CKA(initial, trained) is close to 1.0 and far above the other-init
 reference, training barely moved the encoder — it was effectively a no-op. If it is
 down near the other-init reference, the encoder moved as far as a different random
-seed would, i.e. it changed a lot but (per §5c–§5e) not usefully.
+seed would, i.e. it changed a lot.
 
 E_initial: taken from `<encoder>_steps/step_000000.pt` when that exists (the exact
 init the run started from). Otherwise it is REBUILT from the seed, which is only
@@ -34,7 +31,7 @@ TWO PARTS, both run when you press Run:
   1. STATIC     — CKA(E_initial, E_trained) for each finished encoder + the references.
   2. TRAJECTORY — CKA(E_initial, E_step_k) across training, from the step-tagged
                   checkpoints the 100k runs write every `checkpoint_every` steps.
-                  This is the supervision's "track CKA across training". It works on a
+                  It works on a
                   job still in progress: pull whatever checkpoints exist so far
                   (`cluster/sync.sh pull`) and it uses those; missing directories are
                   skipped with a note. Reference anchors are constant across steps, so
@@ -80,7 +77,7 @@ ENCODERS = {
     "full": ("experiments/trained_encoder_full.pt", ""),
 }
 
-# TRAJECTORY (the supervision's "track CKA across training"): step-tagged encoder
+# TRAJECTORY: step-tagged encoder
 # directories written by run_experiment.py when `checkpoint_every` is set. We compute
 # CKA(E_initial, E_step_k) for every checkpoint, where E_initial is step_000000.pt —
 # the exact untrained encoder that run started from. A directory that does not exist
@@ -272,7 +269,7 @@ def main() -> None:
           "'trained' row\nagainst 'other-init' (reseeding) and against "
           "'chemeleon'/'morgan' (a real gap).\n")
 
-    # --- Trajectory: CKA across training (supervision TODO 2, "track CKA") ------ #
+    # --- Trajectory: CKA across training ---------------------------------------- #
     if TRAJECTORIES:
         print("=" * 70)
         print("TRAJECTORY — CKA(E_initial, E_step_k) across training\n")

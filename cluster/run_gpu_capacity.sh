@@ -1,10 +1,8 @@
 #!/bin/bash
-# The program HTCondor runs INSIDE the docker container for the capacity run (runtime_capacity.py).
-# It uses the uv environment + Hugging Face cache that cluster/setup_env.sh
-# prepared once in your (mounted) home directory.
+# Runs inside the docker container: runtime_capacity.py.
 set -euo pipefail
 
-# TODO: set this to where your repo lives in your home directory on the cluster.
+# Where the repository lives in your home directory on the cluster.
 REPO="$HOME/chemprop-tabpfn"
 cd "$REPO"
 

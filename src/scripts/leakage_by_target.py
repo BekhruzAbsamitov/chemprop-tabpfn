@@ -1,7 +1,7 @@
 """scripts/leakage_by_target.py — which pool molecules the encoder saw measured on the SAME target.
 
 The leakage audit (Methodology Table 3.5) counts a pool molecule as leaked if it occurs
-anywhere in the encoder's training split. The 2026-09-29 supervision pointed out that this is
+anywhere in the encoder's training split. That is
 not the problematic case: a molecule measured against an unrelated protein tells the encoder
 nothing about its activity on the benchmark target. Leakage that matters is a (molecule,
 target) pair, the same molecule measured against the pool's own target.

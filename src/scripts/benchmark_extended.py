@@ -1,52 +1,38 @@
-"""scripts/benchmark_extended.py — the follow-up AL experiments of the 2026-09-29 supervision.
+"""scripts/benchmark_extended.py — the active learning benchmark of the thesis and its controls.
 
 The experiments, selected by name (cluster jobs pass it as the first argument):
 
-  acquisition   E2-E5. Same protocol as the primary benchmark (benchmark_al.py: seeds,
-                budgets, 20 rounds, 1,000-candidate subsample), but on three representations
-                (CheMeleon, Morgan, random-init Chemprop) and with the acquisition variants the supervision asked
-                about:
-                  - EI and PI relative to the incumbent y+ AND to the hit threshold y_thresh
-                  - for TabPFN, EI and PI computed both from the Gaussian approximation
-                    (mu, sigma) and from TabPFN's full predictive (bar) distribution
-                  - a Gaussian process with a Tanimoto kernel, on Morgan fingerprints
-                  - a third metric: the mean activity of the acquired compounds
-  subsampling   E6. Does scoring only 1,000 candidates per round change the comparison?
-                D2R and USP7 (the two smallest pools), CheMeleon, all three surrogates,
-                greedy and EI, with the 1,000-candidate subsample AND the full pool.
-
-  final         The last complete run (2026-11-04), replacing the primary benchmark, its
-                three RQ4 transfer runs and the acquisition experiment above with ONE run:
-                every representation of those runs (12 shared, plus each target's own
-                domain-matched encoder at two training lengths) and the seed-1 replicate of
-                the epoch-level encoder (epochs 21 and 26), all four surrogates, and
-                every criterion of `acquisition` (greedy; EI and PI at y+ and y_thresh; for
-                TabPFN from the Gaussian form and from the bar distribution). The Tanimoto
-                GP runs on every representation here, not on Morgan only.
-  final_subsampling  The full-pool arms of E6 for the final run, with every criterion; the
+  final         The benchmark of the thesis. The protocol of benchmark_al.py (seeds, budgets,
+                20 rounds, 1,000-candidate subsample) on every representation (12 shared, the
+                seed-1 replicate of the epoch-level encoder at epochs 21 and 26, plus each
+                target's own domain-matched encoder at two training lengths), with all four
+                surrogates (TabPFN, RF, RBF GP, Tanimoto GP) and every criterion: greedy; EI and
+                PI relative to the incumbent y+ and to the hit threshold y_thresh; for TabPFN
+                computed both from the Gaussian approximation (mu, sigma) and from its full
+                predictive (bar) distribution. The mean activity of the acquired compounds is
+                recorded as a third metric.
+  final_subsampling  Does scoring only 1,000 candidates per round change the comparison? The
+                same criteria scoring every untested molecule (USP7 and D2R, CheMeleon); the
                 1,000-candidate arms they are compared with are those of `final`.
-  seed1_control Added after the final run (2026-11-09): the untrained starting point
-                of the seed-1 encoders, benchmarked as one more representation with the same
-                four surrogates and criteria as `final`. The seed-1 encoders (epochs 21 and
-                26) start from another initialisation than "chemprop_untrained" (seed 0), so
-                their gain over random initialisation is measured against THIS control. It is
-                a later job of the same protocol, paired with the arms of `final` by pool and
-                seed as every job of that run is (each was a separate cluster job too).
-                A separate control, not part of the benchmark grid: its file name does not
-                match "final_*.csv", so the analyses of the final run do not pick it up.
-  repro_check   Submitted with seed1_control: the D2R / Morgan job of `final` run again
-                under another name. Morgan is computed on the CPU and reproduced bit for bit
-                between earlier runs, so this file must equal final_d2r_morgan.csv in every
-                column except `experiment` and `seconds`. If it does, the code and the
-                environment of the later jobs are those of the final run, and seed1_control
-                can be paired with it.
+  seed1_control The untrained starting point of the seed-1 encoders, benchmarked as one more
+                representation with the same four surrogates and criteria as `final`. The
+                seed-1 encoders (epochs 21 and 26) start from another initialisation than
+                "chemprop_untrained" (seed 0), so their gain over random initialisation is
+                measured against THIS control. A separate control, not part of the benchmark
+                grid: its file name does not match "final_*.csv", so the analyses of the final
+                run do not pick it up.
+  repro_check   Submitted with seed1_control: the D2R / Morgan job of `final` run again under
+                another name. Morgan is computed on the CPU, so this file must equal
+                final_d2r_morgan.csv in every column except `experiment` and `seconds`. If it
+                does, the code and the environment of the later jobs are those of the final
+                run, and seed1_control can be paired with it.
+  acquisition, subsampling   Earlier, smaller versions of `final` and `final_subsampling`.
 
-Every campaign is recorded PER SEED and PER ROUND (the primary benchmark stored seed
-means only), so later analyses can pair at the level of individual seeds.
+Every campaign is recorded PER SEED and PER ROUND, so later analyses can pair at the level of
+individual seeds.
 
-PAIRING: all arms of one run share the pool, the seed sets and the session, so they can be
-compared with each other. They must NOT be paired with rows of the primary benchmark
-(report §5e: cross-run GPU nondeterminism).
+PAIRING: all arms of one run share the pool and the seed sets, so they can be compared with
+each other.
 
 Run locally (one target, one representation):   press Run with the settings below.
 Cluster:  python src/scripts/benchmark_extended.py <experiment> <target> <representation>
@@ -92,11 +78,7 @@ N_ESTIMATORS = 4                   # TabPFN ensemble size, as in the primary ben
 OUT_DIR = "experiments/benchmark_extended"   # default; an experiment may name its own out_dir
 RESUME = True                      # continue an interrupted job instead of refusing to start
 
-# Every representation of the earlier AL runs, with the definitions of benchmark_al.py:
-# the primary benchmark's arms and those of its three RQ4 transfer runs, plus the seed-1
-# replicate of the epoch-level encoder, never benchmarked before. "chemeleon",
-# "morgan" and "chemprop_untrained" (random-init Chemprop D-MPNN, seed 0) are the three of
-# the acquisition experiment, unchanged.
+# Every representation of the benchmark, with the definitions of benchmark_al.py.
 FINAL_SHARED = [
     "morgan", "physchem", "mordred3d", "chemeleon", "chemprop_untrained",
     "chemprop_trained_full",                                            # all ChEMBL
@@ -117,10 +99,9 @@ for _target, _cfg in TARGETS.items():
                 "encoder", f"experiments/trained_encoder_{_cfg['own_encoder']}{_suffix}.pt")
             OWN_ENCODER_TARGET[_name] = _target
 
-# The control of the seed-1 encoders, added after the final run. training.py saves
-# `epoch_000.pt` as "epoch 0: the untrained baseline", before the first update, so it is the
-# exact starting point of the seed-1 encoders. Kept out of REPRESENTATIONS so that the
-# `final` experiment stays what was run.
+# The control of the seed-1 encoders: training.py saves `epoch_000.pt` before the first update,
+# so it is their exact starting point. Kept out of REPRESENTATIONS so that the `final`
+# experiment stays what was run.
 SEED1_CONTROL_REPRESENTATIONS = {
     "chemprop_untrained_seed1": (
         "encoder", "experiments/trained_encoder_full_sp_50ep_seed1_epochs/epoch_000.pt"),

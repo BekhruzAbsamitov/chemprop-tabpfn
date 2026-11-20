@@ -1,8 +1,6 @@
-"""scripts/calibration_study.py — direct evaluation of predictive calibration (E1).
+"""scripts/calibration_study.py — direct evaluation of predictive calibration.
 
-The 2026-09-29 supervision asked for calibration to be assessed DIRECTLY, not only
-indirectly through EI vs greedy: "for each dataset, train a model on a random split and
-evaluate ECE on the test set; 3 models x 5 datasets x (1 representation)".
+
 
 For a regression model, calibration means that its predictive intervals contain the true
 value as often as they claim to. For each nominal level q (10 %, 20 %, ..., 90 %, 95 %) the
@@ -21,12 +19,12 @@ Each surrogate is evaluated with the intervals that acquisition actually uses:
   rf, gp, gp_tanimoto  Gaussian intervals mu +- z sigma (EI/PI assume a Gaussian)
   tabpfn  "gauss"      Gaussian intervals mu +- z sigma, sigma = half the 68 % width (as in EI)
   tabpfn  "full"       the quantiles of TabPFN's full bar distribution
-Comparing TabPFN's two rows measures what the Gaussian approximation costs (also E5).
+Comparing TabPFN's two rows measures what the Gaussian approximation costs.
 
 Datasets: the four benchmark pools plus Mpro (the fifth dataset of Gorantla et al. 2024).
 Representations: CheMeleon for all models; Morgan in addition, so the Tanimoto-kernel GP
 (defined on binary fingerprints only) can be evaluated as well; and the random-init
-Chemprop encoder, the weak-representation control of the primary benchmark.
+Chemprop encoder, the weak-representation control of the benchmark.
 
 Output: experiments/calibration_study.csv (refuses to overwrite).
 Cluster: condor_submit cluster/run_gpu_calibration.sub

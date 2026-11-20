@@ -1,6 +1,4 @@
-# HTCondor submit file — the FINAL AL benchmark run (2026-11-04): one complete run that
-# replaces the primary benchmark, its three RQ4 transfer runs and the extended acquisition
-# experiment (benchmark_extended.py, experiments "final" and "final_subsampling").
+# The final active learning benchmark (benchmark_extended.py, experiments "final" and "final_subsampling").
 #
 #   final              62 jobs, one per (target, representation): 14 shared representations
 #                      (incl. the seed-1 replicate of the epoch-level encoder, epochs 21 and 26)
@@ -16,7 +14,7 @@
 # re-run), so never submit this file twice while jobs from it are still queued or running.
 # Longest jobs first. Day-long jobs, so no MaxJobRetirementTime.
 #
-# Submit from the repo root, after `mkdir -p runlogs`:
+# Submit from the repository root, after `mkdir -p runlogs`:
 #   condor_submit -dry-run /dev/null cluster/run_gpu_benchmark_final.sub   # validate only
 #   condor_submit cluster/run_gpu_benchmark_final.sub
 universe                = docker

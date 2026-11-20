@@ -1,18 +1,17 @@
 """scripts/build_saureus_corrected.py — the S. aureus pool with the pMIC its curator defined.
 
-The supervisor's file (data/raw/s_aureus_curated_with_scores_filtered.csv; data/curated/
+The source file (data/raw/s_aureus_curated_with_scores_filtered.csv; data/curated/
 S_aureus.csv is a byte-identical copy) describes `pMIC` as -log10(MIC in mol/L), "higher is
 better". The column actually holds log10(MIC + 1) with MIC in ug/mL, which INCREASES with MIC.
 The benchmark maximised it with hits = pMIC >= 2.41 (MIC >= ~256 ug/mL), i.e. the least active
 5 % of the pool: none of those molecules is marked susceptible in the file. The pool was also
 meant to contain exact measurements only, but no step ever filtered on `Standard Relation`.
-See notes/saureus-label-correction.md.
 
 This script rebuilds the pool as intended, leaving both source files untouched:
   1. keep exact measurements only (Standard Relation "="); censored values ("> 256", "< 0.5")
      are bounds, not measurements
   2. pMIC = -log10(MIC [mol/L]),  MIC [mol/L] = max(MIC, MIC_FLOOR) [ug/mL] * 1e-3 / MW [g/mol],
-     i.e. pMIC = -log10(MIC [ug/mL] / MW) + 3 (the supervisor's form, 2026-10-07; pMIC 5 = 10 uM).
+     i.e. pMIC = -log10(MIC [ug/mL] / MW) + 3 (pMIC 5 = 10 uM).
      MW is RDKit's average molecular weight (Descriptors.MolWt) of the SMILES. The file's own
      `mol_weight` column is the exact (monoisotopic) mass, which differs by up to 6 g/mol
      (at most 0.004 in pMIC).
@@ -42,7 +41,7 @@ from data_utils import data  # noqa: E402
 # --------------------------------------------------------------------------- #
 # SETTINGS                                                                    #
 # --------------------------------------------------------------------------- #
-SOURCE_CSV = "data/raw/s_aureus_curated_with_scores_filtered.csv"   # the supervisor's file
+SOURCE_CSV = "data/raw/s_aureus_curated_with_scores_filtered.csv"  # the source file
 OUTPUT_CSV = "data/curated/S_aureus_corrected.csv"
 HIT_TOP_FRAC = 0.05
 # Exact MICs below 0.001 ug/mL lie below standard broth-dilution series; 13 measurements report

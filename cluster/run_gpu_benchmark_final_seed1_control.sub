@@ -1,44 +1,27 @@
-# HTCondor submit file — the seed-1 control for the final AL benchmark run (2026-11-09).
+# The seed-1 control of the final active learning benchmark (benchmark_extended.py, experiments
+# "seed1_control" and "repro_check").
 #
-# The second-seed encoders of the final run (epochs 21 and 26 of the preset
-# full_sp_50ep_seed1) start from another initialisation than the random-init control of
-# that run (chemprop_untrained, seed 0), so their gain over random initialisation mixes the
-# effect of training with the difference between two initialisations. This run adds the
-# missing control: the untrained starting point of the seed-1 run (its epoch_000.pt, saved
-# before the first update), benchmarked exactly like every other representation.
+#   seed1_control   4 jobs, one per target: the untrained starting point of the seed-1 encoders
+#                   (epoch_000.pt of preset full_sp_50ep_seed1), benchmarked with the same arms as the
+#                   seed-1 encoders of `final`. Those encoders start from another initialisation than
+#                   chemprop_untrained (seed 0), so their gain over random initialisation is measured
+#                   against this control.
+#   repro_check     1 job: the D2R / Morgan job of `final` under another name. Its output must equal
+#                   final_d2r_morgan.csv in every column except `experiment` and `seconds`; if it does
+#                   not, do not pair seed1_control with `final`.
 #
-#   seed1_control   4 jobs, one per target, representation chemprop_untrained_seed1;
-#                   TabPFN, RF, RBF GP and Tanimoto GP; greedy, EI and PI at y+ and
-#                   y_thresh, for TabPFN from the Gaussian form AND the bar distribution;
-#                   4 budget configurations x 5 seeds; 1,000 candidates per round. The same
-#                   arms as the seed-1 encoders of `final`.
-#   repro_check     1 job: the final run's D2R / Morgan job, rerun under another name.
-#                   Morgan is computed on the CPU and reproduced bit for bit between earlier
-#                   runs, so the output must equal final_d2r_morgan.csv in every column
-#                   except `experiment` and `seconds`. If it does, these later jobs ran the
-#                   code and environment of the final run, and seed1_control can be paired
-#                   with it. If it does not, do not pair seed1_control with `final`.
-#
-# Expected cost (round time of the same arms in the final run): seed1_control 3.0 h
-# (TYK2), 2.9 h (S. aureus), 2.2 h (USP7) and 1.7 h (D2R); repro_check 5.2 h. About
-# 15 GPU-hours in all; with five free GPUs the wall time is set by repro_check, about 5-6 h.
-#
-# Outputs, per seed and per round, in experiments/benchmark_final/:
+# About 15 GPU-hours in all. Outputs, per seed and per round, in experiments/benchmark_final/:
 #   seed1_control_<target>_chemprop_untrained_seed1.csv   and   repro_check_d2r_morgan.csv
-# Neither name matches "final_*.csv", so the analyses of the final run (plot_benchmark.py)
-# do not pick them up; seed1_control is a separate control, not part of the benchmark grid.
+# Neither name matches "final_*.csv", so plot_benchmark.py does not pick them up.
 # A requeued job RESUMES its file (finished campaigns kept, a cut-off one re-run), so never
 # submit this file twice while jobs from it are still queued or running.
 #
-# BEFORE SUBMITTING, on the cluster:
-#   1. the updated src/scripts/benchmark_extended.py must be there (it defines both
-#      experiments); commit it first, so that the run is tied to a recorded version;
-#   2. experiments/trained_encoder_full_sp_50ep_seed1_epochs/epoch_000.pt must exist
-#      (the final run read epochs 21 and 26 from the same folder);
-#   3. experiments/benchmark_final/ must not already hold seed1_control_* or
-#      repro_check_* files from a test run (they would be resumed, not rerun).
+# Before submitting, on the cluster:
+#   1. experiments/trained_encoder_full_sp_50ep_seed1_epochs/epoch_000.pt must exist;
+#   2. experiments/benchmark_final/ must not already hold seed1_control_* or repro_check_*
+#      files from a test run (they would be resumed, not rerun).
 #
-# Submit from the repo root, after `mkdir -p runlogs`:
+# Submit from the repository root, after `mkdir -p runlogs`:
 #   condor_submit -dry-run /dev/null cluster/run_gpu_benchmark_final_seed1_control.sub   # validate only
 #   condor_submit cluster/run_gpu_benchmark_final_seed1_control.sub
 universe                = docker

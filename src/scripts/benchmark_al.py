@@ -1,25 +1,11 @@
 """scripts/benchmark_al.py — AL benchmark: TabPFN vs baseline models × representations.
 
-Replicates the chempfn active-learning protocol IN THIS REPO. For every
-(target × representation × model × strategy × initial-size × batch-size) it runs a
-retrospective AL loop, averages over folds/seeds, and reports the CEF curve
-(cumulative enrichment factor) + new hits found.
+For every (target × representation × model × strategy × initial-size × batch-size) it runs a
+retrospective AL loop, averages over seeds, and reports the CEF curve (cumulative enrichment
+factor) + new hits found.
 
-  Targets         : S. aureus (40k), TYK2 (10k), USP7 (4.5k), D2R (2.5k) — a 16x range
-                    of pool sizes, all at a ~5 % hit rate so base rates are comparable.
-  Representations : the classical descriptors (Morgan, physchem, Mordred 3D), Chemeleon,
-                    Chemprop random-init, Chemprop trained on all ChEMBL, and per target
-                    its OWN domain-matched encoder at two training lengths.
-  Models          : TabPFN, RandomForest, GaussianProcess.
-  Strategies      : EI, GREEDY.
-
-Questions this answers:
-  1. Does TabPFN beat the classical surrogates, and where does the margin come from?
-  2. Do the learned representations beat the classical descriptors at all?
-  3. Does the 100k encoder do better than the short-run one? §8b showed it drifts as far
-     from its init as Chemeleon does — so this asks whether that movement helps.
-  4. Is the full-ChEMBL encoder any good when it ISN'T cheating? It saw 77 % of the
-     S. aureus pool but only 0.2 % of TYK2, so TYK2 is its first fair test.
+The benchmark of the thesis is run by benchmark_extended.py, which imports the pools, the
+featurisation and the protocol from this file.
 
 LEAKAGE is tracked per (representation, target) in the LEAKAGE table below and written
 to the output CSV; arms above 1 % molecule overlap are flagged [LEAKY] in the log. That is
@@ -31,9 +17,7 @@ RUNNING. The targets are independent, so pass one as the first argument to run i
     python benchmark_al.py tyk2       # one target -> experiments/al_benchmark_tyk2.csv
     python benchmark_al.py            # all four   -> experiments/al_benchmark.csv
 
-The cluster submit file uses the first form with `queue TARGET in (...)`, so the four
-run concurrently and the sweep finishes in roughly a quarter of the wall-clock. Merge
-the per-target CSVs afterwards with `merge_benchmark_csvs()`.
+Merge the per-target CSVs afterwards with `merge_benchmark_csvs()`.
 """
 
 from __future__ import annotations
@@ -81,11 +65,10 @@ from models.tabpfn_regressor import _load_hf_token  # noqa: E402
 # domain-matched training pays off on its own target. TYK2 has none (no kinase
 # adaptive set was built), so it runs the shared arms only.
 TARGETS = {
-    # Corrected 2026-10-07 (approved by the supervisor): the original S_aureus.csv stores
-    # log10(MIC + 1) in ug/mL, which RISES with MIC, so "pMIC >= 2.41" selected the least
-    # active 5 %. The corrected pool keeps exact measurements only and uses molar pMIC
-    # = -log10(MIC_ug / MW) + 3 (src/scripts/build_saureus_corrected.py); hits are the top
-    # 5 %, as for the other pools. Results on the original pool are NOT comparable.
+    # The original S_aureus.csv stores log10(MIC + 1) in ug/mL, which rises with MIC. The corrected
+    # pool keeps exact measurements only and uses molar pMIC = -log10(MIC_ug / MW) + 3
+    # (src/scripts/build_saureus_corrected.py); hits are the top 5 %, as for the other pools.
+    # Results on the original pool are NOT comparable.
     "saureus": dict(csv="data/curated/S_aureus_corrected.csv", smiles_col="Smiles",
                     value_col="pMIC", hit_top_frac=0.05,
                     own_encoder="saureus"),                       # 31,085 mols → 3.5 %
@@ -99,15 +82,10 @@ TARGETS = {
                 batch_sizes=[5, 10], own_encoder="d2r"),          #  2,502 mols → 12 %
 }
 
-# Arms run on EVERY target -> (kind, checkpoint-or-None). Each target additionally
-# gets its own domain-matched encoder at 8k/20k and 100k steps (see
-# `representations_for`); the 100k arm asks whether the much larger representational
-# drift found in §8b buys anything in active learning.
+# Arms run on EVERY target -> (kind, checkpoint-or-None). Each target additionally gets its
+# own domain-matched encoder at two training lengths (see `representations_for`).
 REPRESENTATIONS = {
-    # Classical descriptors — no learning at all. These are the baselines the learned
-    # representations have to beat, and the comparison the 2026-08-12 supervision asked
-    # for. Widths differ by 10x across the arms below (physchem 200 ... Morgan 2048),
-    # so part of any ranking is a width effect — see the dimensionality ablation.
+    # Classical descriptors, no learning. Widths differ by 10x (physchem 200 ... Morgan 2048).
     "morgan": ("morgan", None),             # 2048, sparse binary
     "physchem": ("physchem", None),         #  200, dense, interpretable
     "mordred3d": ("mordred3d", None),       # 1826, dense, needs 3D conformers
@@ -115,83 +93,55 @@ REPRESENTATIONS = {
     "chemeleon": ("chemeleon", None),       # 2048, pretrained, frozen
     "chemprop_untrained": ("untrained", None),   # 300, random init — the control
     "chemprop_trained_full": ("encoder", "experiments/trained_encoder_full.pt"),
-    # Retrained on the 2026-08-20 curated single-protein set (§5h): the first run whose
-    # in-domain val_spearman rose significantly above its own baseline. By same-target
-    # overlap it is clean on every pool (S. aureus 0 %, TYK2 0.2 %, USP7 2.6 %, D2R 4.4 %),
-    # where the full-ChEMBL encoder saw 59 % of the S. aureus pool measured on S. aureus.
-    # By molecule alone it still overlaps 91 % of D2R, almost all in adenosine-receptor
-    # assays; the 1.2 % once quoted here was a raw-string match (see LEAKAGE). TWO arms because §7 found every long run
-    # peaks early and decays, so best-val checkpointing was added: `_best` is the peak
-    # checkpoint (step 64k, val 0.3992), the plain arm is the final one (100k, 0.3603).
-    # Whether the val-selected checkpoint TRANSFERS better is itself an open question.
+    # Trained on the single-protein ChEMBL set for 100k steps: `_best` is the checkpoint with the
+    # best validation (step 64k), the plain arm is the final one.
     "chemprop_trained_full_sp": ("encoder", "experiments/trained_encoder_full_sp.pt"),
     "chemprop_trained_full_sp_best": ("encoder", "experiments/trained_encoder_full_sp_best.pt"),
-    # The same training set carried to 10 full epochs (§5h): in-domain validation
-    # converges by ~epoch 5 and ends level with its own random init. Benchmarked so the
-    # transfer question is answered at the LONGEST training, not only at 3.19 epochs —
-    # otherwise the thesis reports convergence for one encoder and transfer for another.
-    # Leakage is identical to the 3.19-epoch arms: same parquet, same train split.
+    # The same training set carried to 10 full epochs.
     "chemprop_trained_full_sp_10ep": ("encoder", "experiments/trained_encoder_full_sp_10ep.pt"),
     "chemprop_trained_full_sp_10ep_best": ("encoder", "experiments/trained_encoder_full_sp_10ep_best.pt"),
-    # The epoch-level run at lr 3e-5 (§5h, 2026-09-11 supervision): validation loss fell
-    # steadily to its best at epoch 23 and then flattened (epochs 24-26 worse). Both
-    # checkpoints are taken from the per-epoch directory, which holds the ORIGINAL run's
-    # files (a requeued restart on 2026-10-01 overwrote only epoch_000/001 and the
-    # top-level .pt files). This is the RQ4 transfer test for the first encoder whose
-    # in-domain gain was steady rather than transient.
+    # The epoch-level run at learning rate 3e-5: best validation loss at epoch 23, last epoch 26.
+    # Both checkpoints are taken from the per-epoch directory.
     "chemprop_trained_full_sp_50ep_best": (
         "encoder", "experiments/trained_encoder_full_sp_50ep_epochs/epoch_023.pt"),
     "chemprop_trained_full_sp_50ep_final": (
         "encoder", "experiments/trained_encoder_full_sp_50ep_epochs/epoch_026.pt"),
-    # Its seed-1 replicate (preset full_sp_50ep_seed1: same corpus and train split, other
-    # initialisation, training order and episode splits): best validation loss at epoch 21,
-    # early stopping at epoch 26. Benchmarked in the final run only (benchmark_extended.py).
-    # The epoch files are identical in weights to trained_encoder_full_sp_50ep_seed1{_best,}.pt.
+    # Its seed-1 replicate (preset full_sp_50ep_seed1): best validation loss at epoch 21, early
+    # stopping at epoch 26.
     "chemprop_trained_full_sp_50ep_seed1_best": (
         "encoder", "experiments/trained_encoder_full_sp_50ep_seed1_epochs/epoch_021.pt"),
     "chemprop_trained_full_sp_50ep_seed1_final": (
         "encoder", "experiments/trained_encoder_full_sp_50ep_seed1_epochs/epoch_026.pt"),
-    # The group's own pretrained D-MPNN (2026-08-20 supervision). 512-d, RIGR
-    # resonance-invariant featurisation, embedding taken from the FULL forward pass —
-    # see models/rigr_encoder.py. Frozen, like Chemeleon: a representation arm, not
-    # something we train. Its random-init twin is the matched control that separates
-    # "their pretraining helped" from "any 512-d RIGR encoder would do this" — the same
-    # untrained-vs-trained pairing that carries the RQ4 result for our own encoder.
+    # The group's pretrained D-MPNN: 512-d, RIGR featurisation (models/rigr_encoder.py), frozen.
+    # Its random-init twin is the matched control.
     "rigr_pretrained": ("rigr", "data/weights/chemicl_mpnn.pt"),
     "rigr_untrained": ("rigr", None),
 }
 
 # MOLECULE overlap between an encoder's TRAINING split and a benchmark pool, as a fraction
 # of the pool: the pool molecule occurs in some training assay, after RDKit canonicalisation
-# of both sides (src/scripts/leakage_by_target.py, 2026-10-06). Everything not listed is 0 %:
-# the adaptive encoders had every benchmark compound removed at build time, and that holds
-# for their _long variants too (same training parquet).
+# of both sides (src/scripts/leakage_by_target.py). Everything not listed is 0 %: the adaptive
+# encoders had every benchmark compound removed at build time, and that holds for their
+# _long variants too (same training parquet).
 #
 # Molecule overlap is not label leakage: a molecule measured on an unrelated protein says
 # nothing about its activity on the benchmark target. The same-target overlap is in
 # experiments/leakage_by_target.csv, and it is small except full ChEMBL on S. aureus:
 #   full ChEMBL      S. aureus 58.8 %  TYK2 0.15 %  USP7 3.7 %  D2R 3.8 %
 #   single-protein   S. aureus  0.0 %  TYK2 0.15 %  USP7 2.6 %  D2R 4.4 %
-# The single-protein values used before 2026-10-06 (D2R 1.2 %, USP7 and TYK2 0 %) were
-# raw-string matches; the Gorantla pools are not stored in canonical form, so most matches
-# were missed. S. aureus values are for the corrected pool (S_aureus_corrected.csv); on
-# the original pool they were 77.2 % (full ChEMBL) and 4.4 % (single-protein).
+# S. aureus values are for the corrected pool (S_aureus_corrected.csv).
 LEAKAGE = {
     ("chemprop_trained_full", "saureus"): 0.8436,  # corrected pool; 0.772 on the original
     ("chemprop_trained_full", "d2r"): 0.911,   # by molecule; only 3.8 % on the D2 target
     ("chemprop_trained_full", "usp7"): 0.044,
     ("chemprop_trained_full", "tyk2"): 0.0015,  # essentially clean
-    # UNKNOWN, not zero: `rigr_pretrained` is the group's checkpoint and we were not told
-    # which molecules it was trained on, so its overlap with these pools cannot be
-    # measured from anything in this repo. NaN records that honestly — writing 0.0 would
-    # assert a clean arm we have not verified. Resolve by asking for the training set;
-    # until then read its results with the same caution as the 77 %-leaked arm.
+    # UNKNOWN, not zero: the training molecules of `rigr_pretrained` are not known, so its overlap
+    # with these pools cannot be measured. NaN records that.
     ("rigr_pretrained", "saureus"): float("nan"),
     ("rigr_pretrained", "d2r"): float("nan"),
     ("rigr_pretrained", "usp7"): float("nan"),
     ("rigr_pretrained", "tyk2"): float("nan"),
-    # Measured 2026-08-26 against the TRAIN SPLIT of the parquet the encoder actually saw
-    # (not the source CSV — the build dropped 17k rows and sub-5-measurement assays).
+    # Measured against the TRAIN SPLIT of the parquet the encoder actually saw.
     ("chemprop_trained_full_sp", "saureus"): 0.0421,
     ("chemprop_trained_full_sp", "d2r"): 0.9137,
     ("chemprop_trained_full_sp", "usp7"): 0.0289,
@@ -228,22 +178,10 @@ LEAKAGE = {
     ("chemprop_trained_full_sp_50ep_seed1_final", "tyk2"): 0.0015,
 }
 
-# Restrict the sweep to a subset of REPRESENTATIONS (empty = run them all). Used to
-# answer one focused question without paying for the full grid.
-#
-# PAIRING RULE — the reason this exists rather than "just run the new arm". Comparisons
-# in §5e are paired: they hold representation, strategy, budget and SEED fixed and
-# compare arms *within one run*. That is only valid when the arms saw the same pool in
-# the same order. Before the 2026-08-24 `maintain_order` fix (data.load_target) the pool
-# came back shuffled differently on every call, so rows from a NEW run cannot be paired
-# against rows in the existing experiments/al_benchmark.csv — those were produced under a
-# different, unrecoverable ordering. A focused run must therefore carry its own reference
-# arms, and be analysed only against itself.
-# Every benchmark run as a named preset: (RUN_TAG, ONLY_REPRESENTATIONS). The arm lists are
-# those of the original runs, read back from their result files on 2026-10-07, so that a
-# target can be re-run inside an existing run with exactly the same arms (the S. aureus
-# re-runs after the label correction). "{own}" stands for the target's own domain-matched
-# encoder and is skipped on a target without one (TYK2).
+# Every benchmark run as a named preset: (RUN_TAG, ONLY_REPRESENTATIONS); an empty list runs
+# every representation. Comparisons are paired within one run (same pool, same order, same
+# seeds), so a focused run carries its own reference arms. "{own}" stands for the target's
+# own domain-matched encoder and is skipped on a target without one (TYK2).
 RUNS: dict[str, tuple[str, list[str]]] = {
     "primary": ("", ["morgan", "physchem", "mordred3d", "chemeleon", "chemprop_untrained",
                      "chemprop_trained_full", "chemprop_trained_own_{own}",
@@ -261,8 +199,7 @@ RUNS: dict[str, tuple[str, list[str]]] = {
     ]),
 }
 # The run to execute. Press Run in the IDE to use this one; a cluster job may name another
-# as the SECOND argument (python benchmark_al.py <target> <run>). Without it, the jobs
-# queued before 2026-10-07 keep running the 50-epoch benchmark as submitted.
+# as the SECOND argument (python benchmark_al.py <target> <run>).
 RUN = "50ep"
 # Only when this file is the script being run: benchmark_extended.py, calibration_study.py and
 # runtime_study.py import it, and their own command-line arguments mean something else.
@@ -287,20 +224,10 @@ SEED = 0
 # Names this run's outputs. MUST be changed for any run that is not a full re-do of the
 # whole grid, otherwise a per-target job overwrites the previous run's part file of the
 # same name and its data is gone. "" = the canonical full-grid outputs.
-#
-# NOTE on cross-run pairing: runs made AFTER the 2026-08-24 `maintain_order` fix all see
-# the identical pool in the identical order, so their rows ARE pairable with each other
-# (unlike anything from before the fix). `chemeleon` and `chemprop_untrained` appear in
-# both the "rigr" and "fullsp" runs precisely so this can be verified rather than assumed:
-# if their numbers match across the two CSVs, the runs can be merged and every arm
-# compared against every other. If they do not match, something else is non-deterministic
-# and the runs must be analysed separately.
 RUN_TAG = RUNS[RUN][0]
 
 SAVE_TO = f"experiments/al_benchmark{'_' + RUN_TAG if RUN_TAG else ''}.csv"
-# Per-target jobs write here, one file each; merge_benchmark_csvs() combines them into
-# SAVE_TO. A subdirectory rather than a filename suffix, so a saureus run cannot land on
-# experiments/al_benchmark_saureus.csv — that is the earlier single-target run's data.
+# Per-target jobs write here, one file each; merge_benchmark_csvs() combines them into SAVE_TO.
 PARTS_DIR = f"experiments/al_benchmark_parts{'_' + RUN_TAG if RUN_TAG else ''}"
 
 
@@ -435,9 +362,8 @@ def selected_targets() -> tuple[dict, str]:
         name = sys.argv[1]
         if name not in TARGETS:
             raise SystemExit(f"unknown target {name!r}; choose from {list(TARGETS)}")
-        # Deliberately a subdirectory, NOT experiments/al_benchmark_<target>.csv: that
-        # pattern would collide with al_benchmark_saureus.csv, the earlier
-        # single-target run, and silently destroy it.
+        # A subdirectory, NOT experiments/al_benchmark_<target>.csv, which would collide with the
+        # file of an earlier single-target run.
         return {name: TARGETS[name]}, f"{PARTS_DIR}/{name}.csv"
     return TARGETS, SAVE_TO
 
@@ -469,8 +395,6 @@ def main() -> None:
 
     print(f"device {device} | targets {list(targets)} -> {save_to}")
     # Print the arms that will ACTUALLY run, i.e. after ONLY_REPRESENTATIONS is applied.
-    # Printing the raw REPRESENTATIONS constant here would claim a full sweep while a
-    # focused one executes — the log has to match the run.
     _arms = list(representations_for(next(iter(targets.values()))))
     if ONLY_REPRESENTATIONS:
         print(f"  [subset] ONLY_REPRESENTATIONS is set — running {len(_arms)} of "
@@ -479,9 +403,8 @@ def main() -> None:
           f"init{INIT_SIZES} x batch{BATCH_SIZES} x {N_FOLDS} folds\n")
 
     out = REPO_ROOT / save_to
-    # Never overwrite a previous run's results. A job requeued by HTCondor restarts from
-    # scratch and would otherwise rewrite this file from its first rows (that is how the
-    # 50-epoch training run lost its curve on 2026-10-01).
+    # Never overwrite a previous run's results: a job requeued by HTCondor restarts from scratch
+    # and would otherwise rewrite this file from its first rows.
     if out.exists():
         raise SystemExit(f"refusing to overwrite {out}; move it away first")
     out.parent.mkdir(parents=True, exist_ok=True)

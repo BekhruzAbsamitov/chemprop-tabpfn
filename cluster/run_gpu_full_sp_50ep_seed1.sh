@@ -1,17 +1,13 @@
 #!/bin/bash
-# The program HTCondor runs INSIDE the docker container for the SEED-1 REPLICATE of the 50-epoch
-# single-protein run (preset full_sp_50ep_seed1).
-# It uses the uv environment + Hugging Face cache that cluster/setup_env.sh
-# prepared once in your (mounted) home directory.
+# Runs inside the docker container: run_experiment.py, preset "full_sp_50ep_seed1".
 set -euo pipefail
 
-# TODO: set this to where your repo lives in your home directory on the cluster.
+# Where the repository lives in your home directory on the cluster.
 REPO="$HOME/chemprop-tabpfn"
 cd "$REPO"
 
-# Keep a separate, timestamped copy of this start's output. If HTCondor requeues the job,
-# the restart writes to the same .out file and would erase the first start's log (that is
-# how the original 50-epoch run's per-epoch log was lost on 2026-10-01).
+# Keep a separate, timestamped copy of this start's output: if HTCondor requeues the job,
+# the restart would otherwise overwrite the .out file of the first start.
 mkdir -p runlogs
 exec > >(tee -a "runlogs/full_sp_50ep_seed1.$(date -u +%Y%m%dT%H%M%SZ).tee.log") 2>&1
 

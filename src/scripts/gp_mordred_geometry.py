@@ -3,7 +3,7 @@
 Prints, per representation: effective rank, pairwise-distance scale and spread (CV, p99/p1),
 the length scale and signal variance the benchmark GP fits, the resulting off-diagonal kernel
 entries, and the spread of the predicted mean; for Mordred also the per-column scales and a
-re-fit on standardised features. Results of 2026-10-06 are in report.md / the thesis Ch. 4.
+re-fit on standardised features. The values are copied into appendix_c_tables.py (Appendix C of the thesis).
 """
 import sys
 import warnings

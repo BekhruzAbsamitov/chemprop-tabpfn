@@ -10,7 +10,7 @@ subsample and not a limit of the GPU.
 Runtime. RUNTIME_CSV (runtime_study.py) holds the wall-clock time of one acquisition round,
 fitting (or conditioning on) the labelled set and predicting for the candidates, on the S. aureus pool: three
 representations, labelled sets of 10 to 1,100 molecules, scoring 1,000 candidates and scoring the whole
-remaining pool. Two points per setting identify the two parts of the cost model of the 2026-10-29 supervision,
+remaining pool. Two points per setting identify the two parts of the cost model,
 
     time of a round = a(n) + m * b(n),
 
@@ -20,8 +20,6 @@ sizes. The cost of a campaign is the sum over its rounds, each at that round's l
 extrapolation to larger pools assumes that b(n) stays constant, which is not measured. TabPFN ran on the GPU
 (NVIDIA A100-PCIe-40GB, the model on which 50 of the 64 benchmark jobs ran), the other surrogates on the CPU of the
 same host (four cores requested; the job sees all cores of the host, so the CPU times depend on its load).
-The first sweep (experiments/runtime_study.csv, 2026-10-07) ran on an H200 and was about twice as fast; it is no
-longer used in the thesis.
 
 Check. The cost model is compared with the rounds of the benchmark's own S. aureus campaigns that ran on the same
 GPU model (CHECK_REPRESENTATIONS; greedy selection, 1,000 candidates, all four configurations), each with the
@@ -47,7 +45,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 # --------------------------------------------------------------------------- #
 # SETTINGS                                                                    #
 # --------------------------------------------------------------------------- #
-RUNTIME_CSV = "experiments/runtime_study_a100.csv"   # the sweep on an A100-PCIe-40GB (2026-11-09); the first, on an H200, is experiments/runtime_study.csv
+RUNTIME_CSV = "experiments/runtime_study_a100.csv"   # the sweep on an A100-PCIe-40GB
 FINAL_DIR = "experiments/benchmark_final"
 OUT_TEX = "experiments/appendix_b_tables.tex"
 CAPACITY_CSV = "experiments/runtime_capacity_a100.csv"   # one predict call per candidate-set size (runtime_capacity.py)
@@ -55,15 +53,14 @@ CAPACITY_REPRESENTATIONS = [("chemeleon", "CheMeleon ($2{,}048$)"),
                             ("chemprop_untrained", "Random-init Chemprop ($300$)")]
 CAPACITY_CONTEXTS = [100, 1100]
 CAPACITY_SIZES = [1_000, 10_000, 30_000, 100_000, 200_000, 400_000]
-# Settings whose attempt ended the job: the CSV has their `started` row only, the error is in the job's output file
-# (runlogs/run_gpu_capacity_a100.237508.out: TabPFNCUDAOutOfMemoryError, 33.75 GiB allocated, 7.45 GiB more requested).
+# Settings whose attempt ended the job (out of GPU memory): the CSV has their `started` row only.
 CAPACITY_OUT_OF_MEMORY = {("chemprop_untrained", 100, 400_000)}
 
 SUBSAMPLE = 1000                                  # candidates per round in the benchmark
 POOL_SIZES = [10**4, 10**5, 10**6, 10**7, 10**9]  # extrapolation: candidates scored every round
 CAMPAIGN_INIT, CAMPAIGN_BATCH, CAMPAIGN_ROUNDS = 100, 50, 20    # the labelled sets of the extrapolated campaign
-# S. aureus campaigns of the final run that ran on an A100-PCIe-40GB, the GPU of the runtime sweep (condor log of
-# the final run: job 4 chemeleon on gefjon, job 2 morgan on fulla; chemprop_untrained ran on an L40S and is left out).
+# S. aureus campaigns of the final run that ran on an A100-PCIe-40GB, the GPU of the runtime sweep
+# (chemprop_untrained ran on an L40S and is left out).
 CHECK_REPRESENTATIONS = ["chemeleon", "morgan"]
 
 N_SEEDS = 5

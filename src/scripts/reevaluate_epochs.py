@@ -1,8 +1,8 @@
 """scripts/reevaluate_epochs.py — re-run the full validation on saved epoch checkpoints.
 
-WHY THIS EXISTS. The 50-epoch single-protein run (HTCondor job 192747) completed epochs
+WHY THIS EXISTS. The 50-epoch single-protein run completed epochs
 0-26, was interrupted by cluster maintenance, and was then requeued by HTCondor, which
-restarted it from scratch on 2026-10-01 and overwrote its curve CSV and stdout log. The
+restarted it from scratch and overwrote its curve CSV and stdout log. The
 values of epochs 25 and 26 were therefore never recorded, but their checkpoints survive in
 experiments/trained_encoder_full_sp_50ep_epochs/. This script recomputes them.
 
