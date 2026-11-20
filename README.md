@@ -96,3 +96,7 @@ experiments/          results written by the scripts (not in the repository)
 | Appendix C (detailed benchmark results) | `calibration_study.py`, `gp_mordred_geometry.py`, `appendix_c_tables.py` |
 | Chapter 5 figures and Appendix D | `plot_training.py`, `cka_study.py`, `cka_debiased.py`, `cka_epoch_level.py`, `feature_stats.py`, `feature_stats_standardised.py`, `appendix_d_tables.py` |
 | Overlap between training corpora and pools (Chapter 3) | `leakage_by_target.py` |
+
+## License
+
+MIT, see `LICENSE`.
